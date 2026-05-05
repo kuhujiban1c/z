@@ -2242,6 +2242,178 @@ end)
 
 makeLabel(secAI, "💡 Tips: Mulai dari titik awal, lalu menyebar ke luar.\n   Semakin kecil Langkah, semakin rapat (tapi lebih lama).")
 
+-- =============== UNLOCK ALL MAP (TURBO BYPASS) ===============
+makeLabel(secAI, "━━━━━━ 🗺️ UNLOCK MAP (TURBO + BYPASS) ━━━━━━")
+
+local mapTurboState = {
+    running = false,
+    visited = {},
+    stepSize = 100,       -- langkah lebih besar (100-300)
+    waitTime = 0.05,      -- hampir tanpa jeda
+    maxRadius = 2000,     -- hingga 10.000
+    noise = true,         -- tambah variasi posisi
+    antiAFK = true,       -- anti-AFK internal
+    walkSim = true,       -- simulasi langkah kecil setelah TP
+}
+
+-- UI status
+local turboStatusLabel = makeLabel(secAI, "Status: Idle")
+turboStatusLabel.TextColor3 = Color3.fromRGB(255, 220, 100)
+
+makeSlider(secAI, "Langkah (stud)", 50, 500, mapTurboState.stepSize, function(v)
+    mapTurboState.stepSize = v
+end)
+
+makeSlider(secAI, "Jeda (detik)", 0, 0.5, mapTurboState.waitTime, function(v)
+    mapTurboState.waitTime = v
+end)
+
+makeSlider(secAI, "Radius Maks", 500, 10000, mapTurboState.maxRadius, function(v)
+    mapTurboState.maxRadius = v
+end)
+
+-- Toggle Noise
+local noiseToggle = makeButton(secAI, "Noise: ON", Color3.fromRGB(120, 160, 120))
+noiseToggle.MouseButton1Click:Connect(function()
+    mapTurboState.noise = not mapTurboState.noise
+    noiseToggle.Text = mapTurboState.noise and "Noise: ON" or "Noise: OFF"
+end)
+
+-- Toggle Anti-AFK
+local afkToggle = makeButton(secAI, "Anti-AFK: ON", Color3.fromRGB(120, 160, 120))
+afkToggle.MouseButton1Click:Connect(function()
+    mapTurboState.antiAFK = not mapTurboState.antiAFK
+    afkToggle.Text = mapTurboState.antiAFK and "Anti-AFK: ON" or "Anti-AFK: OFF"
+end)
+
+-- Toggle Walk Sim
+local walkSimToggle = makeButton(secAI, "Simulasi Jalan: ON", Color3.fromRGB(120, 160, 120))
+walkSimToggle.MouseButton1Click:Connect(function()
+    mapTurboState.walkSim = not mapTurboState.walkSim
+    walkSimToggle.Text = mapTurboState.walkSim and "Simulasi Jalan: ON" or "Simulasi Jalan: OFF"
+end)
+
+local turboProgressLabel = makeLabel(secAI, "Progress: 0 titik dikunjungi")
+turboProgressLabel.TextColor3 = Color3.fromRGB(140, 220, 140)
+
+-- Tombol Start/Stop
+local turboStartBtn = makeStyledButton(secAI, "▶ START TURBO UNLOCK", Color3.fromRGB(255, 140, 30))
+local turboStopBtn = makeButton(secAI, "⏹ STOP", Color3.fromRGB(200, 80, 80))
+turboStopBtn.Visible = false
+
+local function roundPos(pos)
+    return Vector3.new(math.floor(pos.X/10)*10, 0, math.floor(pos.Z/10)*10)
+end
+
+turboStartBtn.MouseButton1Click:Connect(function()
+    if mapTurboState.running then
+        mapTurboState.running = false
+        turboStartBtn.Text = "▶ START TURBO UNLOCK"
+        turboStopBtn.Visible = false
+        turboStatusLabel.Text = "Dihentikan"
+        return
+    end
+
+    local root = character and character:FindFirstChild("HumanoidRootPart")
+    if not root then
+        turboStatusLabel.Text = "❌ Karakter tidak ditemukan"
+        return
+    end
+
+    mapTurboState.running = true
+    mapTurboState.visited = {}
+    local startPos = root.Position
+    table.insert(mapTurboState.visited, roundPos(startPos))
+
+    turboStartBtn.Text = "⏸ TURBO RUNNING..."
+    turboStopBtn.Visible = true
+    turboStatusLabel.Text = "⚡ Turbo menyebar..."
+
+    task.spawn(function()
+        local step = mapTurboState.stepSize
+        local waitTime = mapTurboState.waitTime
+        local maxR = mapTurboState.maxRadius
+        local ring = 1
+        local totalVisited = 1
+
+        -- Loop anti-AFK
+        local afkThread
+        if mapTurboState.antiAFK then
+            afkThread = task.spawn(function()
+                while mapTurboState.running do
+                    task.wait(5)
+                    pcall(function()
+                        if humanoid then
+                            humanoid:ChangeState(Enum.HumanoidStateType.Running)
+                        end
+                    end)
+                end
+            end)
+        end
+
+        while mapTurboState.running and ring * step <= maxR do
+            local points = {}
+            for x = -ring*step, ring*step, step do
+                for z = -ring*step, ring*step, step do
+                    if math.abs(x) == ring*step or math.abs(z) == ring*step then
+                        local target = startPos + Vector3.new(x, 0, z)
+                        -- Tambah noise (offset acak kecil)
+                        if mapTurboState.noise then
+                            target = target + Vector3.new(math.random(-5,5), 0, math.random(-5,5))
+                        end
+                        local rKey = roundPos(target)
+                        if not mapTurboState.visited[rKey] then
+                            table.insert(points, target)
+                            mapTurboState.visited[rKey] = true
+                        end
+                    end
+                end
+            end
+
+            for _, target in ipairs(points) do
+                if not mapTurboState.running then break end
+
+                -- Teleport instantly
+                root.CFrame = CFrame.new(target + Vector3.new(0, 3.5, 0))
+                totalVisited = totalVisited + 1
+                turboProgressLabel.Text = "Progress: " .. totalVisited .. " titik"
+                turboStatusLabel.Text = string.format("📍 Ring %d, %d titik", ring, totalVisited)
+
+                -- Simulasi jalan kecil
+                if mapTurboState.walkSim and humanoid then
+                    local dir = (target - startPos).Unit
+                    humanoid:MoveTo(root.Position + dir * 2)
+                    task.wait(0.05)
+                    humanoid:Move(Vector3.new(0,0,0), true)
+                end
+
+                -- Jeda minimal
+                if waitTime > 0.001 then
+                    task.wait(waitTime)
+                else
+                    task.wait() -- minimal 1 frame
+                end
+            end
+
+            ring = ring + 1
+        end
+
+        mapTurboState.running = false
+        turboStartBtn.Text = "▶ START TURBO UNLOCK"
+        turboStopBtn.Visible = false
+        turboStatusLabel.Text = "✅ Selesai. Total " .. totalVisited .. " titik"
+    end)
+end)
+
+turboStopBtn.MouseButton1Click:Connect(function()
+    mapTurboState.running = false
+    turboStartBtn.Text = "▶ START TURBO UNLOCK"
+    turboStopBtn.Visible = false
+    turboStatusLabel.Text = "Dihentikan"
+end)
+
+makeLabel(secAI, "💡 Tips: Radius hingga 10k stud, jeda 0 detik, noise & anti-AFK untuk hindari deteksi.")
+
 -- =============== DEVELOPER ===============
 local execContainer = Instance.new("Frame", secDeveloper)
 execContainer.Size               = UDim2.new(1, 0, 0, 230)
