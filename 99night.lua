@@ -1588,6 +1588,77 @@ copyAllBtn.MouseButton1Click:Connect(function()
     end)
 end)
 
+-- =============== PATCH: FITUR "PULL TO ME" DI SCANNER ===============
+-- Fungsi ini akan memodifikasi fungsi buildItemPanel yang sudah ada
+-- dengan menambahkan tombol "Pull" di setiap row.
+
+local originalBuildItemPanel = buildItemPanel
+buildItemPanel = function(catName)
+    originalBuildItemPanel(catName)  -- panggil dulu yang asli (agar TP tetap ada)
+    
+    -- Sekarang kita tambahkan tombol "Pull" pada setiap row yang sudah dibuat
+    -- (Row terakhir di itemPanel adalah yang baru saja dibuat oleh originalBuildItemPanel)
+    local rows = {}
+    for _, child in ipairs(itemPanel:GetChildren()) do
+        if child:IsA("Frame") and child:FindFirstChild("TextLabel") then
+            table.insert(rows, child)
+        end
+    end
+    
+    local items = scanner.categoryData[catName]
+    if not items then return end
+
+    for i, row in ipairs(rows) do
+        if i > #items then break end
+        local entry = items[i]
+        
+        -- Cek apakah row sudah punya tombol Pull (hindari duplikasi)
+        if row:FindFirstChild("PullBtn") then continue end
+        
+        -- Buat tombol Pull
+        local pullBtn = Instance.new("TextButton", row)
+        pullBtn.Name = "PullBtn"
+        pullBtn.Size = UDim2.new(0.15, 0, 0.8, 0)
+        pullBtn.Position = UDim2.new(0.7, 0, 0.1, 0)  -- di antara nama dan TP
+        pullBtn.Text = "⬇"
+        pullBtn.BackgroundColor3 = Color3.fromRGB(160, 80, 160)
+        pullBtn.TextColor3 = Color3.new(1,1,1)
+        pullBtn.Font = Enum.Font.GothamBold
+        pullBtn.TextSize = 14
+        Instance.new("UICorner", pullBtn).CornerRadius = UDim.new(0,4)
+        
+        pullBtn.MouseButton1Click:Connect(function()
+            local myRoot = character and character:FindFirstChild("HumanoidRootPart")
+            if not myRoot then return end
+            if not entry.pivot or not entry.pivot.Parent then return end
+            
+            -- Coba pindahkan objek ke pemain
+            local target = entry.pivot
+            local success = pcall(function()
+                -- Jika objek adalah Model, pindahkan PrimaryPart-nya
+                if entry.model:IsA("Model") then
+                    local primary = entry.model.PrimaryPart or target
+                    primary.CFrame = myRoot.CFrame * CFrame.new(0, 3, 0)
+                else
+                    target.CFrame = myRoot.CFrame * CFrame.new(0, 3, 0)
+                end
+            end)
+            
+            if success then
+                pullBtn.BackgroundColor3 = Color3.fromRGB(40, 180, 40)
+                task.delay(1.2, function()
+                    pullBtn.BackgroundColor3 = Color3.fromRGB(160, 80, 160)
+                end)
+            else
+                pullBtn.BackgroundColor3 = Color3.fromRGB(200, 40, 40)
+                task.delay(1.2, function()
+                    pullBtn.BackgroundColor3 = Color3.fromRGB(160, 80, 160)
+                end)
+            end
+        end)
+    end
+end
+
 -- =============== INVENTORY EXPLOIT (DEBUG VERSION) ===============
 makeLabel(secAI, "━━━━━━ 💣 EXPLOIT INVENTORY (v3 Debug) ━━━━━━")
 
