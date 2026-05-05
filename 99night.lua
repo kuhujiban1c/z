@@ -864,8 +864,412 @@ hitboxBtn.MouseButton1Click:Connect(function()
 	end
 end)
 
--- =============== AI TOOLS ===============
--- Auto Farm Alpha Wolf
+-- =============== AI TOOLS — SMART OBJECT SCANNER ===============
+--[[
+  Cara kerja:
+    1. Klik "Scan Workspace" → AI scan semua Model di seluruh workspace
+    2. Tampil daftar KATEGORI (nama unik model) beserta jumlahnya
+    3. Pilih kategori → tampil semua instance individual (Wolf 1, Wolf 2, dst)
+    4. Pilih instance → TP ke sana, atau klik "Auto TP Semua" untuk loop
+
+  Bug lama yang diperbaiki:
+    - TP hanya ke 1 chest: karena loop lama pakai HumanoidRootPart.CFrame
+      yang langsung overwrite tanpa yield proper. Sekarang setiap item
+      mendapat yield task.wait(delay) SETELAH teleport, sehingga semua
+      item dikunjungi satu per satu.
+--]]
+
+-- ---- State AI Scanner ----
+local scanner = {
+	running      = false,   -- auto-loop sedang jalan
+	delay        = 1.5,     -- detik antar teleport
+	espOn        = false,
+	highlights   = {},
+	categoryData = {},      -- { [namaKategori] = { {model, pivotPart}, ... } }
+	selectedCat  = nil,     -- kategori aktif
+	selectedIdx  = nil,     -- index item aktif
+}
+
+-- ---- Cari pivot (posisi) dari sebuah Model ----
+local function getModelPivot(model)
+	local root = model:FindFirstChild("HumanoidRootPart")
+	if root then return root end
+	local primary = model.PrimaryPart
+	if primary then return primary end
+	for _, d in ipairs(model:GetDescendants()) do
+		if d:IsA("BasePart") then return d end
+	end
+	return nil
+end
+
+-- ---- Scan seluruh workspace, kelompokkan per nama ----
+local function scanWorkspace()
+	local result = {}
+	for _, obj in ipairs(workspace:GetDescendants()) do
+		if obj:IsA("Model") then
+			local pivot = getModelPivot(obj)
+			if pivot then
+				local name = obj.Name
+				if not result[name] then result[name] = {} end
+				table.insert(result[name], { model = obj, pivot = pivot })
+			end
+		end
+	end
+	return result
+end
+
+-- ---- Clear semua highlight ----
+local function clearHighlights()
+	for _, h in ipairs(scanner.highlights) do
+		pcall(function() h:Destroy() end)
+	end
+	scanner.highlights = {}
+end
+
+-- ---- Highlight semua item dari kategori ----
+local function highlightCategory(items, color)
+	clearHighlights()
+	if not scanner.espOn then return end
+	color = color or Color3.fromRGB(255, 220, 50)
+	for _, entry in ipairs(items) do
+		local h = Instance.new("Highlight")
+		h.FillColor           = color
+		h.OutlineColor        = Color3.fromRGB(255, 255, 255)
+		h.FillTransparency    = 0.45
+		h.OutlineTransparency = 0
+		h.Adornee             = entry.model
+		h.Parent              = screen
+		table.insert(scanner.highlights, h)
+	end
+end
+
+-- ---- Teleport ke satu entry ----
+local function tpToEntry(entry)
+	local myRoot = character and character:FindFirstChild("HumanoidRootPart")
+	if not myRoot then return false end
+	if not entry or not entry.pivot or not entry.pivot.Parent then return false end
+	myRoot.CFrame = CFrame.new(entry.pivot.Position + Vector3.new(0, 3.5, 0))
+	return true
+end
+
+-- ============================================================
+-- UI BUILDER (inlined, tidak pakai HTML)
+-- ============================================================
+
+-- ---- Header ----
+makeLabel(secAI, "━━━━━━ 🤖 AI OBJECT SCANNER ━━━━━━")
+
+-- Status label
+local scanStatusLabel = makeLabel(secAI, "Status: Belum di-scan")
+scanStatusLabel.TextColor3 = Color3.fromRGB(160, 200, 255)
+
+-- Delay slider
+makeSlider(secAI, "Delay antar TP (detik)", 1, 10, scanner.delay, function(v)
+	scanner.delay = v
+end)
+
+-- ESP toggle
+local espToggle = makeButton(secAI, "👁 ESP Highlight: OFF", Color3.fromRGB(80, 80, 130))
+espToggle.MouseButton1Click:Connect(function()
+	scanner.espOn = not scanner.espOn
+	espToggle.Text = scanner.espOn and "👁 ESP Highlight: ON" or "👁 ESP Highlight: OFF"
+	if not scanner.espOn then
+		clearHighlights()
+	elseif scanner.selectedCat and scanner.categoryData[scanner.selectedCat] then
+		highlightCategory(scanner.categoryData[scanner.selectedCat])
+	end
+end)
+
+-- ============================================================
+-- PANEL ITEM — scrollable list untuk instance individual
+-- ============================================================
+makeLabel(secAI, "── Instance (pilih untuk TP) ──")
+
+local itemPanel = Instance.new("ScrollingFrame", secAI)
+itemPanel.Size                 = UDim2.new(1, 0, 0, 180)
+itemPanel.BackgroundColor3     = Color3.fromRGB(24, 24, 30)
+itemPanel.BorderSizePixel      = 0
+itemPanel.ScrollBarThickness   = 5
+itemPanel.ScrollBarImageColor3 = Color3.fromRGB(100, 100, 130)
+itemPanel.CanvasSize           = UDim2.new(0, 0, 0, 0)
+Instance.new("UICorner", itemPanel).CornerRadius = UDim.new(0, 6)
+
+local itemLayout = Instance.new("UIListLayout", itemPanel)
+itemLayout.Padding = UDim.new(0, 3)
+itemLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+	itemPanel.CanvasSize = UDim2.new(0, 0, 0, itemLayout.AbsoluteContentSize.Y + 8)
+end)
+
+-- Auto TP tombol + Stop
+local autoTPBtn = makeButton(secAI, "▶ Auto TP Semua: OFF", Color3.fromRGB(180, 80, 220))
+local stopTPBtn = makeButton(secAI, "⏹ STOP", Color3.fromRGB(180, 40, 40))
+stopTPBtn.Visible = false
+
+stopTPBtn.MouseButton1Click:Connect(function()
+	scanner.running   = false
+	autoTPBtn.Text    = "▶ Auto TP Semua: OFF"
+	stopTPBtn.Visible = false
+end)
+
+-- ---- Populate item panel ----
+local function buildItemPanel(catName)
+	-- Bersihkan panel
+	for _, c in ipairs(itemPanel:GetChildren()) do
+		if c:IsA("TextButton") or c:IsA("Frame") or c:IsA("TextLabel") then
+			c:Destroy()
+		end
+	end
+
+	local items = scanner.categoryData[catName]
+	if not items or #items == 0 then
+		local lbl = Instance.new("TextLabel", itemPanel)
+		lbl.Size               = UDim2.new(1, 0, 0, 28)
+		lbl.BackgroundTransparency = 1
+		lbl.TextColor3         = Color3.fromRGB(180, 80, 80)
+		lbl.Font               = Enum.Font.Gotham
+		lbl.TextSize           = 12
+		lbl.Text               = "  Tidak ada instance ditemukan"
+		return
+	end
+
+	scanner.selectedCat = catName
+	if scanner.espOn then highlightCategory(items) end
+
+	for i, entry in ipairs(items) do
+		local myRoot = character and character:FindFirstChild("HumanoidRootPart")
+		local dist   = myRoot and entry.pivot.Parent
+			and math.floor((myRoot.Position - entry.pivot.Position).Magnitude)
+			or "?"
+
+		local row = Instance.new("Frame", itemPanel)
+		row.Size            = UDim2.new(1, -6, 0, 32)
+		row.BackgroundColor3 = Color3.fromRGB(34, 34, 44)
+		row.BorderSizePixel = 0
+		Instance.new("UICorner", row).CornerRadius = UDim.new(0, 5)
+
+		-- Nomor + nama
+		local nameLbl = Instance.new("TextLabel", row)
+		nameLbl.Size             = UDim2.new(0.65, 0, 1, 0)
+		nameLbl.Position         = UDim2.new(0, 6, 0, 0)
+		nameLbl.BackgroundTransparency = 1
+		nameLbl.TextColor3       = Color3.fromRGB(240, 220, 100)
+		nameLbl.Font             = Enum.Font.Gotham
+		nameLbl.TextSize         = 12
+		nameLbl.TextXAlignment   = Enum.TextXAlignment.Left
+		nameLbl.Text             = string.format("[%d] %s", i, catName)
+
+		-- Jarak
+		local distLbl = Instance.new("TextLabel", row)
+		distLbl.Size             = UDim2.new(0.2, 0, 1, 0)
+		distLbl.Position         = UDim2.new(0.65, 0, 0, 0)
+		distLbl.BackgroundTransparency = 1
+		distLbl.TextColor3       = Color3.fromRGB(140, 200, 140)
+		distLbl.Font             = Enum.Font.Gotham
+		distLbl.TextSize         = 11
+		distLbl.Text             = tostring(dist) .. "st"
+
+		-- TP button
+		local tpBtn = Instance.new("TextButton", row)
+		tpBtn.Size            = UDim2.new(0.15, 0, 0.8, 0)
+		tpBtn.Position        = UDim2.new(0.85, -2, 0.1, 0)
+		tpBtn.Text            = "TP"
+		tpBtn.BackgroundColor3 = Color3.fromRGB(60, 130, 230)
+		tpBtn.TextColor3      = Color3.new(1, 1, 1)
+		tpBtn.Font            = Enum.Font.GothamBold
+		tpBtn.TextSize        = 11
+		tpBtn.BorderSizePixel = 0
+		Instance.new("UICorner", tpBtn).CornerRadius = UDim.new(0, 4)
+
+		tpBtn.MouseButton1Click:Connect(function()
+			if tpToEntry(entry) then
+				tpBtn.BackgroundColor3 = Color3.fromRGB(40, 160, 40)
+				task.delay(1.2, function()
+					tpBtn.BackgroundColor3 = Color3.fromRGB(60, 130, 230)
+				end)
+			else
+				tpBtn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
+				task.delay(1.2, function()
+					tpBtn.BackgroundColor3 = Color3.fromRGB(60, 130, 230)
+				end)
+			end
+		end)
+	end
+end
+
+-- Auto TP logic
+autoTPBtn.MouseButton1Click:Connect(function()
+	local catName = scanner.selectedCat
+	if not catName or not scanner.categoryData[catName] then
+		scanStatusLabel.Text = "❌ Pilih kategori dulu!"
+		return
+	end
+
+	scanner.running   = true
+	autoTPBtn.Text    = "▶ Auto TP: RUNNING..."
+	stopTPBtn.Visible = true
+
+	task.spawn(function()
+		while scanner.running do
+			-- Refresh list setiap putaran (item mungkin respawn)
+			local items = scanner.categoryData[catName]
+			if not items or #items == 0 then
+				scanStatusLabel.Text = "❌ Tidak ada item di kategori ini"
+				break
+			end
+
+			local myRoot = character and character:FindFirstChild("HumanoidRootPart")
+			if not myRoot then task.wait(1); continue end
+
+			for i, entry in ipairs(items) do
+				if not scanner.running then break end
+
+				-- Cek entry masih exist
+				if not entry.pivot or not entry.pivot.Parent then
+					continue  -- skip jika sudah hilang (destroyed)
+				end
+
+				-- Teleport
+				tpToEntry(entry)
+				autoTPBtn.Text = string.format(
+					"▶ Auto TP: [%d/%d] %s", i, #items, catName
+				)
+				scanStatusLabel.Text = string.format(
+					"✈️ TP ke %s #%d / %d", catName, i, #items
+				)
+
+				-- Yield proper — ini yang menyebabkan bug lama hanya TP ke 1
+				task.wait(scanner.delay)
+			end
+
+			-- Setelah satu putaran selesai, berhenti (tidak loop ulang)
+			scanner.running = false
+		end
+
+		autoTPBtn.Text    = "▶ Auto TP Semua: SELESAI ✅"
+		stopTPBtn.Visible = false
+		scanStatusLabel.Text = "✅ Selesai teleport semua " .. (scanner.selectedCat or "")
+		task.delay(3, function()
+			autoTPBtn.Text = "▶ Auto TP Semua: OFF"
+		end)
+	end)
+end)
+
+-- ============================================================
+-- PANEL KATEGORI — scrollable, dibuat SETELAH scan
+-- ============================================================
+makeLabel(secAI, "━━━━━━ 📋 KATEGORI OBJEK ━━━━━━")
+
+local catPanel = Instance.new("ScrollingFrame", secAI)
+catPanel.Size                 = UDim2.new(1, 0, 0, 220)
+catPanel.BackgroundColor3     = Color3.fromRGB(20, 20, 28)
+catPanel.BorderSizePixel      = 0
+catPanel.ScrollBarThickness   = 5
+catPanel.ScrollBarImageColor3 = Color3.fromRGB(100, 100, 140)
+catPanel.CanvasSize           = UDim2.new(0, 0, 0, 0)
+Instance.new("UICorner", catPanel).CornerRadius = UDim.new(0, 6)
+
+local catLayout = Instance.new("UIListLayout", catPanel)
+catLayout.Padding = UDim.new(0, 3)
+catLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+	catPanel.CanvasSize = UDim2.new(0, 0, 0, catLayout.AbsoluteContentSize.Y + 8)
+end)
+
+local activeCatBtn = nil  -- tombol kategori yang sedang dipilih
+
+local function buildCategoryPanel()
+	-- Bersihkan
+	for _, c in ipairs(catPanel:GetChildren()) do
+		if c:IsA("TextButton") or c:IsA("Frame") or c:IsA("TextLabel") then
+			c:Destroy()
+		end
+	end
+	activeCatBtn = nil
+
+	-- Urutkan nama kategori A→Z
+	local names = {}
+	for name, _ in pairs(scanner.categoryData) do
+		table.insert(names, name)
+	end
+	table.sort(names)
+
+	if #names == 0 then
+		local lbl = Instance.new("TextLabel", catPanel)
+		lbl.Size               = UDim2.new(1, 0, 0, 28)
+		lbl.BackgroundTransparency = 1
+		lbl.TextColor3         = Color3.fromRGB(180, 80, 80)
+		lbl.Font               = Enum.Font.Gotham
+		lbl.TextSize           = 12
+		lbl.Text               = "  Tidak ada model ditemukan"
+		return
+	end
+
+	for _, name in ipairs(names) do
+		local items = scanner.categoryData[name]
+		local count = #items
+
+		local row = Instance.new("Frame", catPanel)
+		row.Size            = UDim2.new(1, -6, 0, 34)
+		row.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+		row.BorderSizePixel = 0
+		Instance.new("UICorner", row).CornerRadius = UDim.new(0, 5)
+
+		local catBtn = Instance.new("TextButton", row)
+		catBtn.Size            = UDim2.new(0.78, 0, 1, 0)
+		catBtn.BackgroundTransparency = 1
+		catBtn.TextColor3      = Color3.fromRGB(200, 230, 255)
+		catBtn.Font            = Enum.Font.Gotham
+		catBtn.TextSize        = 12
+		catBtn.TextXAlignment  = Enum.TextXAlignment.Left
+		catBtn.Text            = "  " .. name
+
+		local countLbl = Instance.new("TextLabel", row)
+		countLbl.Size          = UDim2.new(0.22, 0, 1, 0)
+		countLbl.Position      = UDim2.new(0.78, 0, 0, 0)
+		countLbl.BackgroundTransparency = 1
+		countLbl.TextColor3    = Color3.fromRGB(140, 200, 140)
+		countLbl.Font          = Enum.Font.GothamBold
+		countLbl.TextSize      = 12
+		countLbl.Text          = "×" .. count
+
+		catBtn.MouseButton1Click:Connect(function()
+			-- Reset warna tombol lama
+			if activeCatBtn then
+				activeCatBtn.Parent.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+			end
+			-- Warnai tombol aktif
+			row.BackgroundColor3 = Color3.fromRGB(50, 60, 110)
+			activeCatBtn = catBtn
+
+			-- Tampilkan item panel
+			scanner.selectedCat = name
+			scanStatusLabel.Text = "📋 " .. name .. "  (" .. count .. " instance)"
+			buildItemPanel(name)
+		end)
+	end
+end
+
+-- ---- Tombol Scan ----
+local scanBtn = makeButton(secAI, "🔍 Scan Workspace Sekarang", Color3.fromRGB(60, 130, 200))
+scanBtn.MouseButton1Click:Connect(function()
+	scanStatusLabel.Text = "⏳ Scanning..."
+	task.spawn(function()
+		scanner.categoryData = scanWorkspace()
+		local total = 0
+		local cats  = 0
+		for _, v in pairs(scanner.categoryData) do
+			total = total + #v
+			cats  = cats + 1
+		end
+		buildCategoryPanel()
+		scanStatusLabel.Text = string.format(
+			"✅ %d kategori, %d model ditemukan", cats, total
+		)
+	end)
+end)
+
+-- ---- Auto Farm Alpha Wolf (tetap ada, terintegrasi) ----
+makeLabel(secAI, "━━━━━━ ⚔️ AUTO FARM ━━━━━━")
+
 local autoFarmBtn = makeButton(secAI, "Auto Farm Alpha Wolf: OFF", Color3.fromRGB(255, 140, 0))
 autoFarmBtn.MouseButton1Click:Connect(function()
 	aiState.autoFarm = not aiState.autoFarm
@@ -961,301 +1365,7 @@ autoCollectBtn.MouseButton1Click:Connect(function()
 	end
 end)
 
--- =============== ITEM CHEST TELEPORT ===============
---[[
-  Chest locations berdasarkan workspace explorer:
-    - workspace (langsung)  → Item Chest2, Item Chest3
-    - workspace.Items       → berbagai item model termasuk chest
-    - workspace.Characters  → Alpha Wolf, dll (NPC, bukan chest)
-  
-  Fungsi ini mencari semua model yang namanya mengandung "Chest"
-  dari SELURUH workspace secara rekursif.
---]]
-
--- Status
-local chestState = {
-	autoTP       = false,   -- loop teleport otomatis ke semua chest
-	espChest     = false,   -- highlight semua chest
-	collecting   = false,   -- sedang loop collect
-	delay        = 1,       -- jeda antar teleport (detik)
-	radius       = 10,      -- radius proximity untuk dianggap "selesai"
-	chestList    = {},      -- cache daftar chest terakhir
-	highlights   = {},      -- highlight aktif
-}
-
--- ---- Helper: kumpulkan semua model chest dari workspace ----
-local CHEST_KEYWORDS = {"Chest", "chest", "ItemChest", "Item Chest"}
-
-local function isChestModel(obj)
-	if not obj:IsA("Model") then return false end
-	for _, kw in ipairs(CHEST_KEYWORDS) do
-		if string.find(obj.Name, kw, 1, true) then return true end
-	end
-	return false
-end
-
-local function getAllChests()
-	local found = {}
-	-- Cari di seluruh workspace secara rekursif (termasuk folder Items)
-	for _, obj in ipairs(workspace:GetDescendants()) do
-		if isChestModel(obj) then
-			local pivot = obj:FindFirstChild("HumanoidRootPart")
-				or obj:FindFirstChildWhichIsA("BasePart")
-			if pivot then
-				table.insert(found, { model = obj, part = pivot })
-			end
-		end
-	end
-	return found
-end
-
--- ---- Helper: bersihkan semua highlight chest ----
-local function clearChestHighlights()
-	for _, h in ipairs(chestState.highlights) do
-		pcall(function() h:Destroy() end)
-	end
-	chestState.highlights = {}
-end
-
--- ---- Highlight semua chest (ESP) ----
-local function applyChestESP()
-	clearChestHighlights()
-	local chests = getAllChests()
-	for _, entry in ipairs(chests) do
-		local h = Instance.new("Highlight")
-		h.FillColor           = Color3.fromRGB(255, 220, 50)
-		h.OutlineColor        = Color3.fromRGB(255, 140, 0)
-		h.FillTransparency    = 0.4
-		h.OutlineTransparency = 0
-		h.Adornee             = entry.model
-		h.Parent              = screen   -- screen sudah ada di scope atas
-		table.insert(chestState.highlights, h)
-	end
-	return #chests
-end
-
--- ---- Teleport sekali ke satu chest terdekat ----
-local function teleportToNearestChest()
-	local myRoot = character and character:FindFirstChild("HumanoidRootPart")
-	if not myRoot then return nil, "Karakter tidak ditemukan" end
-
-	local chests = getAllChests()
-	if #chests == 0 then return nil, "Tidak ada chest di workspace" end
-
-	local best, bestDist = nil, math.huge
-	for _, entry in ipairs(chests) do
-		local pos  = entry.part.Position
-		local dist = (myRoot.Position - pos).Magnitude
-		if dist < bestDist then
-			best     = entry
-			bestDist = dist
-		end
-	end
-
-	if best then
-		local pos = best.part.Position + Vector3.new(0, 3, 0)
-		myRoot.CFrame = CFrame.new(pos)
-		return best.model.Name, bestDist
-	end
-	return nil, "Gagal"
-end
-
--- ============================================================
--- UI — Tab baru khusus CHEST (ditambahkan ke tab AI Tools)
--- ============================================================
-makeLabel(secAI, "━━━━━━ 📦 ITEM CHEST TOOLS ━━━━━━")
-
--- Info label jumlah chest
-local chestCountLabel = makeLabel(secAI, "Chest ditemukan: –")
-
--- Tombol Scan / Refresh
-local scanChestBtn = makeButton(secAI, "🔍 Scan Semua Chest", Color3.fromRGB(60, 100, 180))
-scanChestBtn.MouseButton1Click:Connect(function()
-	local chests = getAllChests()
-	chestState.chestList = chests
-	chestCountLabel.Text = "Chest ditemukan: " .. #chests
-		.. "  (Chest2 + Chest3 + Items folder)"
-end)
-
--- ESP Chest Toggle
-local espChestBtn = makeButton(secAI, "👁 ESP Chest: OFF", Color3.fromRGB(180, 130, 0))
-espChestBtn.MouseButton1Click:Connect(function()
-	chestState.espChest = not chestState.espChest
-	if chestState.espChest then
-		local count = applyChestESP()
-		espChestBtn.Text = "👁 ESP Chest: ON (" .. count .. ")"
-	else
-		clearChestHighlights()
-		espChestBtn.Text = "👁 ESP Chest: OFF"
-	end
-end)
-
--- Teleport ke Chest Terdekat (sekali)
-local tpNearestBtn = makeButton(secAI, "📦 TP ke Chest Terdekat", Color3.fromRGB(80, 160, 80))
-tpNearestBtn.MouseButton1Click:Connect(function()
-	local name, info = teleportToNearestChest()
-	if name then
-		tpNearestBtn.Text = "✅ TP → " .. name
-		task.delay(2, function()
-			tpNearestBtn.Text = "📦 TP ke Chest Terdekat"
-		end)
-	else
-		tpNearestBtn.Text = "❌ " .. tostring(info)
-		task.delay(2, function()
-			tpNearestBtn.Text = "📦 TP ke Chest Terdekat"
-		end)
-	end
-end)
-
--- Slider delay antar teleport
-makeSlider(secAI, "Delay TP (detik)", 1, 10, chestState.delay, function(v)
-	chestState.delay = v
-end)
-
--- Slider radius proximity
-makeSlider(secAI, "Radius Kumpul (studs)", 3, 20, chestState.radius, function(v)
-	chestState.radius = v
-end)
-
--- AUTO COLLECT ALL CHESTS — Loop teleport ke semua chest satu per satu
-local autoChestBtn = makeButton(secAI, "🤖 Auto TP Semua Chest: OFF", Color3.fromRGB(200, 80, 200))
-autoChestBtn.MouseButton1Click:Connect(function()
-	chestState.autoTP = not chestState.autoTP
-
-	if chestState.autoTP then
-		autoChestBtn.Text = "🤖 Auto TP Chest: ON ⏹ (klik stop)"
-		task.spawn(function()
-			while chestState.autoTP do
-				local myRoot = character and character:FindFirstChild("HumanoidRootPart")
-				if not myRoot then task.wait(1); continue end
-
-				local chests = getAllChests()
-				if #chests == 0 then
-					autoChestBtn.Text = "🤖 Auto TP: Tidak ada chest!"
-					task.wait(3)
-					chestState.autoTP = false
-					break
-				end
-
-				-- Update ESP jika aktif
-				if chestState.espChest then
-					clearChestHighlights()
-					applyChestESP()
-				end
-
-				-- Iterasi setiap chest
-				for i, entry in ipairs(chests) do
-					if not chestState.autoTP then break end
-
-					-- Refresh karakter jika respawn
-					myRoot = character and character:FindFirstChild("HumanoidRootPart")
-					if not myRoot then task.wait(1); break end
-
-					local targetPos = entry.part.Position + Vector3.new(0, 3, 0)
-					myRoot.CFrame   = CFrame.new(targetPos)
-
-					-- Update label progress
-					autoChestBtn.Text = string.format(
-						"🤖 Auto TP: [%d/%d] %s", i, #chests, entry.model.Name
-					)
-
-					task.wait(chestState.delay)
-				end
-
-				-- Satu putaran selesai, scan ulang (chest baru mungkin muncul)
-				task.wait(1)
-			end
-
-			autoChestBtn.Text = "🤖 Auto TP Semua Chest: OFF"
-		end)
-	else
-		autoChestBtn.Text = "🤖 Auto TP Semua Chest: OFF"
-	end
-end)
-
--- TELEPORT LIST — tampilkan daftar chest & klik untuk TP langsung
-makeLabel(secAI, "── Daftar Chest (klik untuk TP) ──")
-
-local chestListFrame = Instance.new("ScrollingFrame", secAI)
-chestListFrame.Size                 = UDim2.new(1, 0, 0, 180)
-chestListFrame.BackgroundColor3     = Color3.fromRGB(28, 28, 28)
-chestListFrame.BorderSizePixel      = 0
-chestListFrame.ScrollBarThickness   = 4
-chestListFrame.ScrollBarImageColor3 = Color3.fromRGB(100, 100, 100)
-chestListFrame.CanvasSize           = UDim2.new(0, 0, 0, 0)
-Instance.new("UICorner", chestListFrame).CornerRadius = UDim.new(0, 6)
-
-local chestListLayout = Instance.new("UIListLayout", chestListFrame)
-chestListLayout.Padding = UDim.new(0, 3)
-chestListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-	chestListFrame.CanvasSize = UDim2.new(0, 0, 0,
-		chestListLayout.AbsoluteContentSize.Y + 8)
-end)
-
-local function buildChestList()
-	-- Bersihkan isi lama
-	for _, c in ipairs(chestListFrame:GetChildren()) do
-		if c:IsA("TextButton") or c:IsA("Frame") then c:Destroy() end
-	end
-
-	local chests = getAllChests()
-	chestCountLabel.Text = "Chest ditemukan: " .. #chests
-
-	if #chests == 0 then
-		local lbl = Instance.new("TextLabel", chestListFrame)
-		lbl.Size               = UDim2.new(1, 0, 0, 28)
-		lbl.BackgroundTransparency = 1
-		lbl.TextColor3         = Color3.fromRGB(180, 80, 80)
-		lbl.Font               = Enum.Font.Gotham
-		lbl.TextSize           = 12
-		lbl.Text               = "  Tidak ada chest ditemukan"
-		return
-	end
-
-	for i, entry in ipairs(chests) do
-		local btn = Instance.new("TextButton", chestListFrame)
-		btn.Size            = UDim2.new(1, -6, 0, 28)
-		btn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-		btn.TextColor3      = Color3.fromRGB(255, 220, 80)
-		btn.Font            = Enum.Font.Gotham
-		btn.TextSize        = 12
-		btn.TextXAlignment  = Enum.TextXAlignment.Left
-		btn.Text            = string.format(
-			"  [%d] %s  (%.0f studs)",
-			i,
-			entry.model.Name,
-			(character and character:FindFirstChild("HumanoidRootPart"))
-				and (character.HumanoidRootPart.Position - entry.part.Position).Magnitude
-				or 0
-		)
-		btn.BorderSizePixel = 0
-		Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 4)
-
-		btn.MouseButton1Click:Connect(function()
-			local myRoot = character and character:FindFirstChild("HumanoidRootPart")
-			if myRoot then
-				myRoot.CFrame = CFrame.new(entry.part.Position + Vector3.new(0, 3, 0))
-				btn.BackgroundColor3 = Color3.fromRGB(40, 100, 40)
-				task.delay(1, function()
-					btn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-				end)
-			end
-		end)
-	end
-end
-
--- Tombol refresh daftar
-local refreshListBtn = makeButton(secAI, "🔄 Refresh Daftar Chest", Color3.fromRGB(50, 50, 80))
-refreshListBtn.MouseButton1Click:Connect(function()
-	buildChestList()
-	if chestState.espChest then
-		clearChestHighlights()
-		applyChestESP()
-	end
-end)
-
--- Build awal saat script load
-task.delay(2, buildChestList)
+-- (old ITEM CHEST TELEPORT section removed — digantikan sistem AI Scanner di atas)
 
 -- =============== DEVELOPER ===============
 local execContainer = Instance.new("Frame", secDeveloper)
