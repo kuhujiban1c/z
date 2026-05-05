@@ -1337,172 +1337,148 @@ scanBtn.MouseButton1Click:Connect(function()
 	end)
 end)
 
--- =============== AUTO COLLECT DIAMOND (AI TOOLS) ===============
-makeLabel(secAI, "━━━━━━ 💎 AUTO COLLECT DIAMOND ━━━━━━")
-
-local diamondState = {
+-- =============== AUTO COLLECT ITEMS (CLICK-BASED) ===============
+local autoCollectState = {
     running = false,
-    targetName = "Diamond",  -- bisa diubah jadi "Diamonds" dsb
-    remoteName = "",         -- isi manual jika tahu nama remote
-    method = "ClickDetector", -- ClickDetector / Remote / ProximityPrompt
+    useRemote = false,
+    remoteName = "",  -- isi jika tahu nama remote untuk collect item
 }
 
-makeLabel(secAI, "Nama Objek Diamond:")
-local diamondNameBox = Instance.new("TextBox", secAI)
-diamondNameBox.Size = UDim2.new(1, 0, 0, 28)
-diamondNameBox.BackgroundColor3 = Color3.fromRGB(34, 34, 44)
-diamondNameBox.TextColor3 = Color3.new(1,1,1)
-diamondNameBox.Font = Enum.Font.Gotham
-diamondNameBox.Text = diamondState.targetName
-diamondNameBox.TextSize = 13
-diamondNameBox.ClearTextOnFocus = false
-Instance.new("UICorner", diamondNameBox).CornerRadius = UDim.new(0,4)
-diamondNameBox.FocusLost:Connect(function()
-    diamondState.targetName = diamondNameBox.Text
+makeLabel(secAI, "━━━━━━ 🧲 AUTO COLLECT ITEMS ━━━━━━")
+
+-- Nama remote (opsional)
+makeLabel(secAI, "Nama Remote (kosongkan jika tidak tahu):")
+local itemRemoteBox = Instance.new("TextBox", secAI)
+itemRemoteBox.Size = UDim2.new(1, 0, 0, 28)
+itemRemoteBox.BackgroundColor3 = Color3.fromRGB(34, 34, 44)
+itemRemoteBox.TextColor3 = Color3.new(1,1,1)
+itemRemoteBox.Font = Enum.Font.Gotham
+itemRemoteBox.PlaceholderText = "Misal: CollectLoot"
+itemRemoteBox.Text = ""
+itemRemoteBox.TextSize = 13
+itemRemoteBox.ClearTextOnFocus = false
+Instance.new("UICorner", itemRemoteBox).CornerRadius = UDim.new(0,4)
+itemRemoteBox.FocusLost:Connect(function()
+    autoCollectState.remoteName = itemRemoteBox.Text
 end)
 
-makeLabel(secAI, "Nama Remote (opsional, kosongkan jika tidak tahu):")
-local diamondRemoteBox = Instance.new("TextBox", secAI)
-diamondRemoteBox.Size = UDim2.new(1, 0, 0, 28)
-diamondRemoteBox.BackgroundColor3 = Color3.fromRGB(34, 34, 44)
-diamondRemoteBox.TextColor3 = Color3.new(1,1,1)
-diamondRemoteBox.Font = Enum.Font.Gotham
-diamondRemoteBox.Text = ""
-diamondRemoteBox.PlaceholderText = "Misal: CollectDiamond"
-diamondRemoteBox.TextSize = 13
-diamondRemoteBox.ClearTextOnFocus = false
-Instance.new("UICorner", diamondRemoteBox).CornerRadius = UDim.new(0,4)
-diamondRemoteBox.FocusLost:Connect(function()
-    diamondState.remoteName = diamondRemoteBox.Text
-end)
+local itemCollectStatusLabel = makeLabel(secAI, "Status: Idle")
+itemCollectStatusLabel.TextColor3 = Color3.fromRGB(160, 200, 255)
 
-local diamondStatusLabel = makeLabel(secAI, "Status: Idle")
-diamondStatusLabel.TextColor3 = Color3.fromRGB(160, 200, 255)
-
--- Fungsi klik ClickDetector dari jarak jauh (client-side)
-local function clickDetector(part)
-    if part:IsA("BasePart") and part:FindFirstChildOfClass("ClickDetector") then
-        local click = part:FindFirstChildOfClass("ClickDetector")
-        -- Tiru event klik
+-- Fungsi klik ClickDetector pada objek BasePart/Model
+local function tryClickObject(obj)
+    -- 1. Jika objek adalah BasePart yang memiliki ClickDetector
+    if obj:IsA("BasePart") and obj:FindFirstChildOfClass("ClickDetector") then
+        local click = obj:FindFirstChildOfClass("ClickDetector")
         for _, fn in pairs(getconnections(click.MouseClick)) do
-            fn:Fire()
+            pcall(function() fn:Fire() end)
         end
         return true
+    end
+    -- 2. Jika objek adalah Model, cari semua bagian yang memiliki ClickDetector
+    if obj:IsA("Model") then
+        for _, part in ipairs(obj:GetDescendants()) do
+            if part:IsA("BasePart") and part:FindFirstChildOfClass("ClickDetector") then
+                local click = part:FindFirstChildOfClass("ClickDetector")
+                for _, fn in pairs(getconnections(click.MouseClick)) do
+                    pcall(function() fn:Fire() end)
+                end
+                return true
+            end
+        end
     end
     return false
 end
 
--- Fungsi cari remote yang mengandung kata kunci
-local function findDiamondRemote()
-    if diamondState.remoteName ~= "" then
-        -- Cari spesifik dari sniffer state atau global
+-- Fungsi cari remote koleksi global
+local function findCollectRemote()
+    if autoCollectState.remoteName ~= "" then
+        -- Cari di sniffer dulu
         if snifferState and snifferState.remotes then
             for path, data in pairs(snifferState.remotes) do
-                if data.object and data.object.Name == diamondState.remoteName then
+                if data.object and data.object.Name == autoCollectState.remoteName then
                     return data.object
                 end
             end
         end
         for _, obj in ipairs(game:GetDescendants()) do
-            if (obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction")) and obj.Name == diamondState.remoteName then
+            if (obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction")) and obj.Name == autoCollectState.remoteName then
                 return obj
             end
-        end
-    end
-    -- Fallback: cari remote yang mengandung kata "Diamond"
-    for _, obj in ipairs(game:GetDescendants()) do
-        if (obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction")) and obj.Name:lower():find("diamond") then
-            return obj
         end
     end
     return nil
 end
 
 -- Tombol Start/Stop
-local diamondToggleBtn = makeStyledButton(secAI, "▶ Start Auto Collect Diamond", Color3.fromRGB(80, 180, 200))
-local diamondStopBtn = makeButton(secAI, "⏹ STOP", Color3.fromRGB(200, 80, 80))
-diamondStopBtn.Visible = false
+local itemToggleBtn = makeStyledButton(secAI, "▶ Start Auto Collect (Click)", Color3.fromRGB(80, 180, 100))
+local itemStopBtn = makeButton(secAI, "⏹ STOP", Color3.fromRGB(200, 80, 80))
+itemStopBtn.Visible = false
 
-local function startDiamondCollection()
-    diamondState.running = true
-    diamondToggleBtn.Text = "⏸ Running..."
-    diamondStopBtn.Visible = true
-    diamondStatusLabel.Text = "🔎 Mencari diamond..."
-
+itemToggleBtn.MouseButton1Click:Connect(function()
+    if autoCollectState.running then
+        autoCollectState.running = false
+        itemToggleBtn.Text = "▶ Start Auto Collect (Click)"
+        itemStopBtn.Visible = false
+        itemCollectStatusLabel.Text = "Status: Berhenti"
+        return
+    end
+    
+    autoCollectState.running = true
+    itemToggleBtn.Text = "⏸ Running..."
+    itemStopBtn.Visible = true
+    
     task.spawn(function()
-        local collected = 0
-        local remote = findDiamondRemote()
-        if remote then
-            diamondStatusLabel.Text = "📡 Remote ditemukan: " .. remote.Name
+        local collectRemote = findCollectRemote()
+        if collectRemote then
+            itemCollectStatusLabel.Text = "📡 Remote ditemukan: " .. collectRemote.Name
         else
-            diamondStatusLabel.Text = "🖱️ Menggunakan ClickDetector"
+            itemCollectStatusLabel.Text = "🖱️ Mode ClickDetector"
         end
-
-        while diamondState.running do
-            local found = false
+        
+        local collected = 0
+        while autoCollectState.running do
+            local foundAny = false
             for _, obj in ipairs(workspace:GetDescendants()) do
-                if not diamondState.running then break end
-                if obj.Name == diamondState.targetName then
-                    if obj:IsA("BasePart") and obj:FindFirstChildOfClass("ClickDetector") then
-                        -- Metode ClickDetector
-                        pcall(clickDetector, obj)
-                        found = true
+                if not autoCollectState.running then break end
+                
+                -- Klik objek dengan ClickDetector
+                if tryClickObject(obj) then
+                    collected = collected + 1
+                    itemCollectStatusLabel.Text = "✅ Klik objek (" .. collected .. ")"
+                    foundAny = true
+                    break  -- satu per loop agar tidak spam berat
+                end
+                
+                -- Jika remote tersedia, kirim objek sebagai argumen
+                if collectRemote and (obj:IsA("BasePart") or obj:IsA("Tool") or obj:IsA("Model")) then
+                    local ok = pcall(function()
+                        collectRemote:FireServer(obj)
+                    end)
+                    if ok then
                         collected = collected + 1
-                        diamondStatusLabel.Text = "✅ Klik Diamond (" .. collected .. ")"
-                    elseif remote then
-                        -- Metode Remote
-                        local ok = pcall(function()
-                            remote:FireServer(obj)
-                        end)
-                        if ok then
-                            collected = collected + 1
-                            diamondStatusLabel.Text = "📡 Fire Remote (" .. collected .. ")"
-                            found = true
-                        end
-                    else
-                        -- Fallback: coba klik semua ClickDetector pada objek yang cocok
-                        -- (jika diamond adalah Model dengan part di dalamnya)
-                        if obj:IsA("Model") then
-                            for _, part in ipairs(obj:GetDescendants()) do
-                                if part:IsA("BasePart") and part:FindFirstChildOfClass("ClickDetector") then
-                                    pcall(clickDetector, part)
-                                    found = true
-                                    collected = collected + 1
-                                    diamondStatusLabel.Text = "✅ Klik Diamond Model (" .. collected .. ")"
-                                end
-                            end
-                        end
+                        itemCollectStatusLabel.Text = "📡 Fire remote (" .. collected .. ")"
+                        foundAny = true
+                        break
                     end
                 end
             end
-            if not found then
-                diamondStatusLabel.Text = "⏳ Menunggu diamond muncul..."
+            if not foundAny then
+                itemCollectStatusLabel.Text = "⏳ Menunggu item..."
             end
-            task.wait(0.5) -- jeda agar tidak terlalu agresif
+            task.wait(0.5)
         end
     end)
-end
-
-diamondToggleBtn.MouseButton1Click:Connect(function()
-    if diamondState.running then
-        -- Stop
-        diamondState.running = false
-        diamondToggleBtn.Text = "▶ Start Auto Collect Diamond"
-        diamondStopBtn.Visible = false
-        diamondStatusLabel.Text = "Status: Berhenti"
-    else
-        startDiamondCollection()
-    end
 end)
 
-diamondStopBtn.MouseButton1Click:Connect(function()
-    diamondState.running = false
-    diamondToggleBtn.Text = "▶ Start Auto Collect Diamond"
-    diamondStopBtn.Visible = false
-    diamondStatusLabel.Text = "Status: Berhenti"
+itemStopBtn.MouseButton1Click:Connect(function()
+    autoCollectState.running = false
+    itemToggleBtn.Text = "▶ Start Auto Collect (Click)"
+    itemStopBtn.Visible = false
+    itemCollectStatusLabel.Text = "Status: Berhenti"
 end)
 
-makeLabel(secAI, "💡 Tips: Ubah nama objek jika diamond bernama lain (misal 'Diamonds'),\n   atau isi nama Remote jika tahu event-nya.")
+makeLabel(secAI, "💡 Tips: Isi nama Remote hanya jika item tidak punya ClickDetector.")
 
 -- =============== REMOTE SNIFFER & CODE COPIER (SAFE VERSION) ===============
 makeLabel(secAI, "━━━━━━ 🕵️ REMOTE SNIFFER (SAFE) ━━━━━━")
