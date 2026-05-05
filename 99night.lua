@@ -1588,6 +1588,106 @@ copyAllBtn.MouseButton1Click:Connect(function()
     end)
 end)
 
+-- =============== INVENTORY EXPLOIT (AI TOOLS) ===============
+makeLabel(secAI, "━━━━━━ 💣 EXPLOIT INVENTORY ━━━━━━")
+
+local exploitState = {
+    itemName = "TestItem",      -- nama item default untuk exploit
+    spamCount = 10,
+    isRunning = false,
+}
+
+makeLabel(secAI, "Nama Item (untuk exploit yg butuh):")
+local exploitItemNameBox = Instance.new("TextBox", secAI)
+exploitItemNameBox.Size = UDim2.new(1, 0, 0, 28)
+exploitItemNameBox.BackgroundColor3 = Color3.fromRGB(34, 34, 44)
+exploitItemNameBox.TextColor3 = Color3.new(1,1,1)
+exploitItemNameBox.Font = Enum.Font.Gotham
+exploitItemNameBox.Text = exploitState.itemName
+exploitItemNameBox.TextSize = 13
+exploitItemNameBox.ClearTextOnFocus = false
+Instance.new("UICorner", exploitItemNameBox).CornerRadius = UDim.new(0,4)
+exploitItemNameBox.FocusLost:Connect(function()
+    exploitState.itemName = exploitItemNameBox.Text
+end)
+
+makeSlider(secAI, "Jumlah Spam per Klik", 1, 50, exploitState.spamCount, function(v)
+    exploitState.spamCount = v
+end)
+
+-- Daftar remote yang sudah terverifikasi pathnya
+local exploitRemotes = {
+    DropItem          = game:GetService("ReplicatedStorage").RemoteEvents.RequestBagDropItem,
+    GiveItemToNPC     = game:GetService("ReplicatedStorage").RemoteEvents.RequestGiveItemToNPC,
+    ConsumeItem       = game:GetService("ReplicatedStorage").RemoteEvents.RequestConsumeItem,
+    ScrapItem         = game:GetService("ReplicatedStorage").RemoteEvents.RequestScrapItem,
+    CraftItem         = game:GetService("ReplicatedStorage").RemoteEvents.CraftItem,
+    CollectCandy      = game:GetService("ReplicatedStorage").RemoteEvents.RequestCollectCandy,
+    CollectCoints     = game:GetService("ReplicatedStorage").RemoteEvents.RequestCollectCoints,
+}
+
+local function spamRemote(remote, args)
+    args = args or {}
+    for _ = 1, exploitState.spamCount do
+        task.spawn(function()
+            pcall(function()
+                remote:FireServer(unpack(args))
+            end)
+        end)
+    end
+end
+
+-- Tombol exploit individual
+local dropItemBtn = makeStyledButton(secAI, "🎒 Spam RequestBagDropItem", Color3.fromRGB(200, 100, 50))
+dropItemBtn.MouseButton1Click:Connect(function()
+    spamRemote(exploitRemotes.DropItem, {exploitState.itemName})
+end)
+
+local giveNPCBtn = makeStyledButton(secAI, "🤝 Spam RequestGiveItemToNPC", Color3.fromRGB(200, 120, 60))
+giveNPCBtn.MouseButton1Click:Connect(function()
+    spamRemote(exploitRemotes.GiveItemToNPC, {exploitState.itemName})
+end)
+
+local consumeBtn = makeStyledButton(secAI, "🍔 Spam RequestConsumeItem", Color3.fromRGB(180, 140, 70))
+consumeBtn.MouseButton1Click:Connect(function()
+    spamRemote(exploitRemotes.ConsumeItem, {exploitState.itemName})
+end)
+
+local scrapBtn = makeStyledButton(secAI, "♻️ Spam RequestScrapItem", Color3.fromRGB(160, 100, 80))
+scrapBtn.MouseButton1Click:Connect(function()
+    spamRemote(exploitRemotes.ScrapItem, {exploitState.itemName})
+end)
+
+local craftBtn = makeStyledButton(secAI, "🔨 Spam CraftItem", Color3.fromRGB(140, 80, 120))
+craftBtn.MouseButton1Click:Connect(function()
+    spamRemote(exploitRemotes.CraftItem, {exploitState.itemName})
+end)
+
+local collectCandyBtn = makeStyledButton(secAI, "🍬 Spam RequestCollectCandy", Color3.fromRGB(200, 160, 100))
+collectCandyBtn.MouseButton1Click:Connect(function()
+    spamRemote(exploitRemotes.CollectCandy, {})
+end)
+
+local collectCoinsBtn = makeStyledButton(secAI, "🪙 Spam RequestCollectCoints", Color3.fromRGB(200, 180, 80))
+collectCoinsBtn.MouseButton1Click:Connect(function()
+    spamRemote(exploitRemotes.CollectCoints, {})
+end)
+
+-- Tombol "Spam All"
+local spamAllInventoryBtn = makeStyledButton(secAI, "💥 SPAM ALL INVENTORY", Color3.fromRGB(255, 50, 50))
+spamAllInventoryBtn.MouseButton1Click:Connect(function()
+    local item = exploitState.itemName
+    spamRemote(exploitRemotes.DropItem, {item})
+    spamRemote(exploitRemotes.GiveItemToNPC, {item})
+    spamRemote(exploitRemotes.ConsumeItem, {item})
+    spamRemote(exploitRemotes.ScrapItem, {item})
+    spamRemote(exploitRemotes.CraftItem, {item})
+    spamRemote(exploitRemotes.CollectCandy, {})
+    spamRemote(exploitRemotes.CollectCoints, {})
+end)
+
+makeLabel(secAI, "⛔ Gunakan dengan bijak – risiko banned!")
+
 -- =============== DEVELOPER ===============
 local execContainer = Instance.new("Frame", secDeveloper)
 execContainer.Size               = UDim2.new(1, 0, 0, 230)
