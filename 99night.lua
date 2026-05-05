@@ -2124,122 +2124,123 @@ clearAnalyzerBtn.MouseButton1Click:Connect(function()
     analyzerStatusLabel.Text = "Status: Siap"
 end)
 
--- =============== UNLOCK ALL MAP (AI TOOLS) ===============
-makeLabel(secAI, "━━━━━━ 🗺️ UNLOCK ALL MAP ━━━━━━")
+-- =============== UNLOCK ALL MAP (SMART SPIRAL) ===============
+makeLabel(secAI, "━━━━━━ 🗺️ UNLOCK MAP (SMART SPREAD) ━━━━━━")
 
 local mapState = {
-    remoteName = "UpdateMapCells", -- default, bisa diganti
     running = false,
+    visited = {},       -- set of Vector3 rounded
+    stepSize = 60,      -- jarak antar titik
+    waitTime = 0.3,     -- jeda antar teleport
+    maxRadius = 500,    -- batas jarak dari titik awal
 }
 
-makeLabel(secAI, "Nama Remote Map:")
-local mapRemoteBox = Instance.new("TextBox", secAI)
-mapRemoteBox.Size = UDim2.new(1, 0, 0, 28)
-mapRemoteBox.BackgroundColor3 = Color3.fromRGB(34, 34, 44)
-mapRemoteBox.TextColor3 = Color3.new(1,1,1)
-mapRemoteBox.Font = Enum.Font.Gotham
-mapRemoteBox.Text = mapState.remoteName
-mapRemoteBox.TextSize = 13
-mapRemoteBox.ClearTextOnFocus = false
-Instance.new("UICorner", mapRemoteBox).CornerRadius = UDim.new(0,4)
-mapRemoteBox.FocusLost:Connect(function()
-    mapState.remoteName = mapRemoteBox.Text
-end)
-
+-- UI status
 local mapStatusLabel = makeLabel(secAI, "Status: Idle")
 mapStatusLabel.TextColor3 = Color3.fromRGB(160, 200, 255)
 
--- Fungsi mencari remote tertentu
-local function findMapRemote(name)
-    if snifferState and snifferState.remotes then
-        for _, r in pairs(snifferState.remotes) do
-            if r.object and r.object.Name == name then
-                return r.object
-            end
-        end
-    end
-    for _, obj in ipairs(game:GetDescendants()) do
-        if (obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction")) and obj.Name == name then
-            return obj
-        end
-    end
-    return nil
-end
-
--- Tombol Unlock via Remote (coba panggil dengan berbagai argumen)
-local unlockRemoteBtn = makeStyledButton(secAI, "🔓 Unlock via Remote", Color3.fromRGB(200, 180, 40))
-unlockRemoteBtn.MouseButton1Click:Connect(function()
-    local remote = findMapRemote(mapState.remoteName)
-    if not remote then
-        mapStatusLabel.Text = "❌ Remote " .. mapState.remoteName .. " tidak ditemukan"
-        return
-    end
-    mapStatusLabel.Text = "⏳ Mencoba unlock map..."
-    -- Coba beberapa kemungkinan argumen:
-    local attempts = {
-        {true},             -- mungkin menerima boolean untuk unlock all
-        {1},                -- mungkin ID area
-        {"all"},
-        {Vector3.new(0,0,0), Vector3.new(99999,99999,99999)}, -- area besar
-        {game.Players.LocalPlayer}, -- player
-    }
-    local successCount = 0
-    for _, args in ipairs(attempts) do
-        if mapState.running then break end
-        local ok = pcall(function()
-            if remote:IsA("RemoteFunction") then
-                remote:InvokeServer(unpack(args))
-            else
-                remote:FireServer(unpack(args))
-            end
-        end)
-        if ok then successCount = successCount + 1 end
-    end
-    mapStatusLabel.Text = string.format("✅ Dicoba %d argumen, %d berhasil dipanggil", #attempts, successCount)
+makeSlider(secAI, "Langkah (stud)", 30, 200, mapState.stepSize, function(v)
+    mapState.stepSize = v
 end)
 
--- Tombol TP ke semua landmark (untuk membuka map secara natural)
-local tpLandmarksBtn = makeButton(secAI, "🌍 TP to All Landmarks", Color3.fromRGB(80, 180, 200))
-tpLandmarksBtn.MouseButton1Click:Connect(function()
-    -- Cari semua model yang mengandung "Landmark" atau "MapPoint"
-    local landmarks = {}
-    for _, obj in ipairs(workspace:GetDescendants()) do
-        if obj:IsA("Model") and (obj.Name:lower():find("landmark") or obj.Name:lower():find("mappoint")) then
-            local pivot = getModelPivot(obj)
-            if pivot then
-                table.insert(landmarks, {name = obj.Name, pivot = pivot})
-            end
-        end
-    end
-    if #landmarks == 0 then
-        mapStatusLabel.Text = "❌ Tidak ada landmark ditemukan"
+makeSlider(secAI, "Jeda (detik)", 0.1, 2, mapState.waitTime, function(v)
+    mapState.waitTime = v
+end)
+
+makeSlider(secAI, "Radius Maks", 100, 2000, mapState.maxRadius, function(v)
+    mapState.maxRadius = v
+end)
+
+local mapProgressLabel = makeLabel(secAI, "Progress: 0 titik dikunjungi")
+mapProgressLabel.TextColor3 = Color3.fromRGB(140, 220, 140)
+
+-- Tombol Start/Stop
+local mapStartBtn = makeStyledButton(secAI, "▶ START UNLOCK MAP", Color3.fromRGB(80, 180, 200))
+local mapStopBtn = makeButton(secAI, "⏹ STOP", Color3.fromRGB(200, 80, 80))
+mapStopBtn.Visible = false
+
+local function roundPos(pos)
+    -- Pembulatan posisi agar gampang dicek sebagai visited
+    return Vector3.new(math.floor(pos.X/10)*10, 0, math.floor(pos.Z/10)*10)
+end
+
+mapStartBtn.MouseButton1Click:Connect(function()
+    if mapState.running then
+        mapState.running = false
+        mapStartBtn.Text = "▶ START UNLOCK MAP"
+        mapStopBtn.Visible = false
+        mapStatusLabel.Text = "Dihentikan"
         return
     end
+
+    local root = character and character:FindFirstChild("HumanoidRootPart")
+    if not root then
+        mapStatusLabel.Text = "❌ Karakter tidak ditemukan"
+        return
+    end
+
+    -- Reset state
     mapState.running = true
-    mapStatusLabel.Text = "⏳ Teleporting ke " .. #landmarks .. " landmark..."
+    mapState.visited = {}
+    local startPos = root.Position
+    table.insert(mapState.visited, roundPos(startPos))
+
+    mapStartBtn.Text = "⏸ RUNNING..."
+    mapStopBtn.Visible = true
+    mapStatusLabel.Text = "⚡ Menyebar..."
+
     task.spawn(function()
-        for i, lm in ipairs(landmarks) do
-            if not mapState.running then break end
-            local myRoot = character and character:FindFirstChild("HumanoidRootPart")
-            if myRoot and lm.pivot and lm.pivot.Parent then
-                myRoot.CFrame = CFrame.new(lm.pivot.Position + Vector3.new(0, 3.5, 0))
-                mapStatusLabel.Text = string.format("✈️ %s (%d/%d)", lm.name, i, #landmarks)
+        local step = mapState.stepSize
+        local waitTime = mapState.waitTime
+        local maxR = mapState.maxRadius
+        local ring = 1
+        local totalVisited = 1
+
+        while mapState.running and ring * step <= maxR do
+            -- Untuk setiap ring (jarak dari pusat), generate titik di sekeliling
+            local points = {}
+            for x = -ring*step, ring*step, step do
+                for z = -ring*step, ring*step, step do
+                    -- Hanya ambil titik di tepi ring (bukan di dalam ring yang lebih kecil)
+                    if math.abs(x) == ring*step or math.abs(z) == ring*step then
+                        local target = startPos + Vector3.new(x, 0, z)
+                        local rKey = roundPos(target)
+                        if not mapState.visited[rKey] then
+                            table.insert(points, target)
+                            mapState.visited[rKey] = true
+                        end
+                    end
+                end
             end
-            task.wait(1.5)
+
+            -- Kunjungi tiap titik di ring ini
+            for _, target in ipairs(points) do
+                if not mapState.running then break end
+                root.CFrame = CFrame.new(target + Vector3.new(0, 3.5, 0))
+                totalVisited = totalVisited + 1
+                mapProgressLabel.Text = "Progress: " .. totalVisited .. " titik dikunjungi"
+                mapStatusLabel.Text = string.format("📍 Ring %d, %d/%d", ring, totalVisited, #points)
+                task.wait(waitTime)
+            end
+
+            ring = ring + 1
         end
-        mapStatusLabel.Text = "✅ Selesai mengunjungi landmark"
+
+        mapStartBtn.Text = "▶ START UNLOCK MAP"
+        mapStopBtn.Visible = false
+        mapStatusLabel.Text = "✅ Selesai. Total " .. totalVisited .. " titik"
         mapState.running = false
     end)
 end)
 
--- Tombol Stop
-local stopMapBtn = makeButton(secAI, "⏹ STOP", Color3.fromRGB(200, 80, 80))
-stopMapBtn.MouseButton1Click:Connect(function()
+mapStopBtn.MouseButton1Click:Connect(function()
     mapState.running = false
+    mapStartBtn.Text = "▶ START UNLOCK MAP"
+    mapStopBtn.Visible = false
     mapStatusLabel.Text = "Dihentikan"
 end)
 
-makeLabel(secAI, "💡 Tips: Gunakan 'Unlock via Remote' untuk coba exploit map,\n   atau 'TP to All Landmarks' untuk membuka map dengan mengunjungi titik.")
+makeLabel(secAI, "💡 Tips: Mulai dari titik awal, lalu menyebar ke luar.\n   Semakin kecil Langkah, semakin rapat (tapi lebih lama).")
 
 -- =============== DEVELOPER ===============
 local execContainer = Instance.new("Frame", secDeveloper)
