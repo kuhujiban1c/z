@@ -1337,148 +1337,128 @@ scanBtn.MouseButton1Click:Connect(function()
 	end)
 end)
 
--- =============== AUTO COLLECT ITEMS (CLICK-BASED) ===============
-local autoCollectState = {
+-- =============== AUTO COLLECT BY OBJECT NAME (AI TOOLS) ===============
+makeLabel(secAI, "━━━━━━ 💎 AUTO COLLECT BY NAME ━━━━━━")
+
+local nameCollectState = {
     running = false,
-    useRemote = false,
-    remoteName = "",  -- isi jika tahu nama remote untuk collect item
+    targetName = "main",   -- bisa "Diamond", "main", dll.
 }
 
-makeLabel(secAI, "━━━━━━ 🧲 AUTO COLLECT ITEMS ━━━━━━")
-
--- Nama remote (opsional)
-makeLabel(secAI, "Nama Remote (kosongkan jika tidak tahu):")
-local itemRemoteBox = Instance.new("TextBox", secAI)
-itemRemoteBox.Size = UDim2.new(1, 0, 0, 28)
-itemRemoteBox.BackgroundColor3 = Color3.fromRGB(34, 34, 44)
-itemRemoteBox.TextColor3 = Color3.new(1,1,1)
-itemRemoteBox.Font = Enum.Font.Gotham
-itemRemoteBox.PlaceholderText = "Misal: CollectLoot"
-itemRemoteBox.Text = ""
-itemRemoteBox.TextSize = 13
-itemRemoteBox.ClearTextOnFocus = false
-Instance.new("UICorner", itemRemoteBox).CornerRadius = UDim.new(0,4)
-itemRemoteBox.FocusLost:Connect(function()
-    autoCollectState.remoteName = itemRemoteBox.Text
+makeLabel(secAI, "Nama Objek Target:")
+local nameTargetBox = Instance.new("TextBox", secAI)
+nameTargetBox.Size = UDim2.new(1, 0, 0, 28)
+nameTargetBox.BackgroundColor3 = Color3.fromRGB(34, 34, 44)
+nameTargetBox.TextColor3 = Color3.new(1,1,1)
+nameTargetBox.Font = Enum.Font.Gotham
+nameTargetBox.Text = nameCollectState.targetName
+nameTargetBox.TextSize = 13
+nameTargetBox.ClearTextOnFocus = false
+Instance.new("UICorner", nameTargetBox).CornerRadius = UDim.new(0,4)
+nameTargetBox.FocusLost:Connect(function()
+    nameCollectState.targetName = nameTargetBox.Text
 end)
 
-local itemCollectStatusLabel = makeLabel(secAI, "Status: Idle")
-itemCollectStatusLabel.TextColor3 = Color3.fromRGB(160, 200, 255)
+local nameCollectStatusLabel = makeLabel(secAI, "Status: Idle")
+nameCollectStatusLabel.TextColor3 = Color3.fromRGB(160, 200, 255)
 
--- Fungsi klik ClickDetector pada objek BasePart/Model
-local function tryClickObject(obj)
-    -- 1. Jika objek adalah BasePart yang memiliki ClickDetector
-    if obj:IsA("BasePart") and obj:FindFirstChildOfClass("ClickDetector") then
-        local click = obj:FindFirstChildOfClass("ClickDetector")
-        for _, fn in pairs(getconnections(click.MouseClick)) do
-            pcall(function() fn:Fire() end)
-        end
-        return true
-    end
-    -- 2. Jika objek adalah Model, cari semua bagian yang memiliki ClickDetector
-    if obj:IsA("Model") then
-        for _, part in ipairs(obj:GetDescendants()) do
-            if part:IsA("BasePart") and part:FindFirstChildOfClass("ClickDetector") then
-                local click = part:FindFirstChildOfClass("ClickDetector")
-                for _, fn in pairs(getconnections(click.MouseClick)) do
+-- Fungsi cari interaksi dalam sebuah instance dan fire
+local function interactWithInstance(inst)
+    -- 1. Jika inst adalah BasePart (termasuk MeshPart), cek ClickDetector / Prompt
+    if inst:IsA("BasePart") then
+        local click = inst:FindFirstChildOfClass("ClickDetector")
+        if click then
+            local conns = getconnections(click.MouseClick)
+            if #conns > 0 then
+                for _, fn in pairs(conns) do
                     pcall(function() fn:Fire() end)
                 end
-                return true
+                return true, "ClickDetector"
             end
         end
+        local prompt = inst:FindFirstChildOfClass("ProximityPrompt")
+        if prompt and prompt.Enabled then
+            pcall(function() prompt:InputHoldBegin() prompt:InputHoldEnd() end)
+            return true, "ProximityPrompt"
+        end
     end
-    return false
-end
 
--- Fungsi cari remote koleksi global
-local function findCollectRemote()
-    if autoCollectState.remoteName ~= "" then
-        -- Cari di sniffer dulu
-        if snifferState and snifferState.remotes then
-            for path, data in pairs(snifferState.remotes) do
-                if data.object and data.object.Name == autoCollectState.remoteName then
-                    return data.object
+    -- 2. Jika inst adalah Model, cek di semua anak
+    if inst:IsA("Model") then
+        for _, child in ipairs(inst:GetDescendants()) do
+            if child:IsA("BasePart") then
+                local click = child:FindFirstChildOfClass("ClickDetector")
+                if click then
+                    local conns = getconnections(click.MouseClick)
+                    if #conns > 0 then
+                        for _, fn in pairs(conns) do
+                            pcall(function() fn:Fire() end)
+                        end
+                        return true, "ClickDetector in Model"
+                    end
+                end
+                local prompt = child:FindFirstChildOfClass("ProximityPrompt")
+                if prompt and prompt.Enabled then
+                    pcall(function() prompt:InputHoldBegin() prompt:InputHoldEnd() end)
+                    return true, "ProximityPrompt in Model"
                 end
             end
         end
-        for _, obj in ipairs(game:GetDescendants()) do
-            if (obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction")) and obj.Name == autoCollectState.remoteName then
-                return obj
-            end
-        end
     end
-    return nil
+
+    return false, nil
 end
 
 -- Tombol Start/Stop
-local itemToggleBtn = makeStyledButton(secAI, "▶ Start Auto Collect (Click)", Color3.fromRGB(80, 180, 100))
-local itemStopBtn = makeButton(secAI, "⏹ STOP", Color3.fromRGB(200, 80, 80))
-itemStopBtn.Visible = false
+local nameToggleBtn = makeStyledButton(secAI, "▶ Start Collect by Name", Color3.fromRGB(100, 200, 200))
+local nameStopBtn = makeButton(secAI, "⏹ STOP", Color3.fromRGB(200, 80, 80))
+nameStopBtn.Visible = false
 
-itemToggleBtn.MouseButton1Click:Connect(function()
-    if autoCollectState.running then
-        autoCollectState.running = false
-        itemToggleBtn.Text = "▶ Start Auto Collect (Click)"
-        itemStopBtn.Visible = false
-        itemCollectStatusLabel.Text = "Status: Berhenti"
+nameToggleBtn.MouseButton1Click:Connect(function()
+    if nameCollectState.running then
+        nameCollectState.running = false
+        nameToggleBtn.Text = "▶ Start Collect by Name"
+        nameStopBtn.Visible = false
+        nameCollectStatusLabel.Text = "Status: Berhenti"
         return
     end
     
-    autoCollectState.running = true
-    itemToggleBtn.Text = "⏸ Running..."
-    itemStopBtn.Visible = true
+    nameCollectState.running = true
+    nameToggleBtn.Text = "⏸ Running..."
+    nameStopBtn.Visible = true
     
     task.spawn(function()
-        local collectRemote = findCollectRemote()
-        if collectRemote then
-            itemCollectStatusLabel.Text = "📡 Remote ditemukan: " .. collectRemote.Name
-        else
-            itemCollectStatusLabel.Text = "🖱️ Mode ClickDetector"
-        end
-        
         local collected = 0
-        while autoCollectState.running do
+        while nameCollectState.running do
             local foundAny = false
             for _, obj in ipairs(workspace:GetDescendants()) do
-                if not autoCollectState.running then break end
-                
-                -- Klik objek dengan ClickDetector
-                if tryClickObject(obj) then
-                    collected = collected + 1
-                    itemCollectStatusLabel.Text = "✅ Klik objek (" .. collected .. ")"
-                    foundAny = true
-                    break  -- satu per loop agar tidak spam berat
-                end
-                
-                -- Jika remote tersedia, kirim objek sebagai argumen
-                if collectRemote and (obj:IsA("BasePart") or obj:IsA("Tool") or obj:IsA("Model")) then
-                    local ok = pcall(function()
-                        collectRemote:FireServer(obj)
-                    end)
+                if not nameCollectState.running then break end
+                if obj.Name == nameCollectState.targetName then
+                    local ok, method = interactWithInstance(obj)
                     if ok then
                         collected = collected + 1
-                        itemCollectStatusLabel.Text = "📡 Fire remote (" .. collected .. ")"
+                        nameCollectStatusLabel.Text = string.format("✅ %s → %s (#%d)", obj.Name, method, collected)
                         foundAny = true
                         break
                     end
                 end
             end
             if not foundAny then
-                itemCollectStatusLabel.Text = "⏳ Menunggu item..."
+                nameCollectStatusLabel.Text = "⏳ Menunggu \"" .. nameCollectState.targetName .. "\"..."
             end
-            task.wait(0.5)
+            task.wait(0.3)
         end
     end)
 end)
 
-itemStopBtn.MouseButton1Click:Connect(function()
-    autoCollectState.running = false
-    itemToggleBtn.Text = "▶ Start Auto Collect (Click)"
-    itemStopBtn.Visible = false
-    itemCollectStatusLabel.Text = "Status: Berhenti"
+nameStopBtn.MouseButton1Click:Connect(function()
+    nameCollectState.running = false
+    nameToggleBtn.Text = "▶ Start Collect by Name"
+    nameStopBtn.Visible = false
+    nameCollectStatusLabel.Text = "Status: Berhenti"
 end)
 
-makeLabel(secAI, "💡 Tips: Isi nama Remote hanya jika item tidak punya ClickDetector.")
+makeLabel(secAI, "💡 Tips: Nama bisa berupa Model utuh atau bagian seperti 'main'.\n   Jika Diamond berupa Model, gunakan nama Model-nya (misal 'Diamond').")
 
 -- =============== REMOTE SNIFFER & CODE COPIER (SAFE VERSION) ===============
 makeLabel(secAI, "━━━━━━ 🕵️ REMOTE SNIFFER (SAFE) ━━━━━━")
