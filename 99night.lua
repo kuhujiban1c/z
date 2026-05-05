@@ -1337,128 +1337,209 @@ scanBtn.MouseButton1Click:Connect(function()
 	end)
 end)
 
--- =============== AUTO COLLECT BY OBJECT NAME (AI TOOLS) ===============
-makeLabel(secAI, "━━━━━━ 💎 AUTO COLLECT BY NAME ━━━━━━")
+-- =============== LOST CHILD TELEPORTER (AI TOOLS) ===============
+makeLabel(secAI, "━━━━━━ 👻 LOST CHILD TELEPORTER ━━━━━━")
 
-local nameCollectState = {
+local lostChildState = {
+    list = {},               -- {model, pivot, name}
     running = false,
-    targetName = "main",   -- bisa "Diamond", "main", dll.
+    delay = 1.5,
 }
 
-makeLabel(secAI, "Nama Objek Target:")
-local nameTargetBox = Instance.new("TextBox", secAI)
-nameTargetBox.Size = UDim2.new(1, 0, 0, 28)
-nameTargetBox.BackgroundColor3 = Color3.fromRGB(34, 34, 44)
-nameTargetBox.TextColor3 = Color3.new(1,1,1)
-nameTargetBox.Font = Enum.Font.Gotham
-nameTargetBox.Text = nameCollectState.targetName
-nameTargetBox.TextSize = 13
-nameTargetBox.ClearTextOnFocus = false
-Instance.new("UICorner", nameTargetBox).CornerRadius = UDim.new(0,4)
-nameTargetBox.FocusLost:Connect(function()
-    nameCollectState.targetName = nameTargetBox.Text
-end)
-
-local nameCollectStatusLabel = makeLabel(secAI, "Status: Idle")
-nameCollectStatusLabel.TextColor3 = Color3.fromRGB(160, 200, 255)
-
--- Fungsi cari interaksi dalam sebuah instance dan fire
-local function interactWithInstance(inst)
-    -- 1. Jika inst adalah BasePart (termasuk MeshPart), cek ClickDetector / Prompt
-    if inst:IsA("BasePart") then
-        local click = inst:FindFirstChildOfClass("ClickDetector")
-        if click then
-            local conns = getconnections(click.MouseClick)
-            if #conns > 0 then
-                for _, fn in pairs(conns) do
-                    pcall(function() fn:Fire() end)
-                end
-                return true, "ClickDetector"
-            end
-        end
-        local prompt = inst:FindFirstChildOfClass("ProximityPrompt")
-        if prompt and prompt.Enabled then
-            pcall(function() prompt:InputHoldBegin() prompt:InputHoldEnd() end)
-            return true, "ProximityPrompt"
-        end
-    end
-
-    -- 2. Jika inst adalah Model, cek di semua anak
-    if inst:IsA("Model") then
-        for _, child in ipairs(inst:GetDescendants()) do
-            if child:IsA("BasePart") then
-                local click = child:FindFirstChildOfClass("ClickDetector")
-                if click then
-                    local conns = getconnections(click.MouseClick)
-                    if #conns > 0 then
-                        for _, fn in pairs(conns) do
-                            pcall(function() fn:Fire() end)
-                        end
-                        return true, "ClickDetector in Model"
-                    end
-                end
-                local prompt = child:FindFirstChildOfClass("ProximityPrompt")
-                if prompt and prompt.Enabled then
-                    pcall(function() prompt:InputHoldBegin() prompt:InputHoldEnd() end)
-                    return true, "ProximityPrompt in Model"
-                end
+-- Scan semua model yang namanya mengandung "Lost Child"
+local function scanLostChildren()
+    local found = {}
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj:IsA("Model") and obj.Name:find("Lost Child") then
+            local pivot = getModelPivot(obj)  -- fungsi dari scanner
+            if pivot then
+                table.insert(found, {
+                    model = obj,
+                    pivot = pivot,
+                    name = obj.Name,
+                })
             end
         end
     end
-
-    return false, nil
+    -- Urutkan berdasarkan nama (Lost Child, Lost Child2, ...)
+    table.sort(found, function(a,b)
+        local na = a.name:gsub("Lost Child", "")
+        local nb = b.name:gsub("Lost Child", "")
+        na = tonumber(na) or 0
+        nb = tonumber(nb) or 0
+        return na < nb
+    end)
+    return found
 end
 
--- Tombol Start/Stop
-local nameToggleBtn = makeStyledButton(secAI, "▶ Start Collect by Name", Color3.fromRGB(100, 200, 200))
-local nameStopBtn = makeButton(secAI, "⏹ STOP", Color3.fromRGB(200, 80, 80))
-nameStopBtn.Visible = false
+local lostStatusLabel = makeLabel(secAI, "Status: Belum di-scan")
+lostStatusLabel.TextColor3 = Color3.fromRGB(160, 200, 255)
 
-nameToggleBtn.MouseButton1Click:Connect(function()
-    if nameCollectState.running then
-        nameCollectState.running = false
-        nameToggleBtn.Text = "▶ Start Collect by Name"
-        nameStopBtn.Visible = false
-        nameCollectStatusLabel.Text = "Status: Berhenti"
+makeSlider(secAI, "Delay TP (detik)", 1, 5, lostChildState.delay, function(v)
+    lostChildState.delay = v
+end)
+
+-- Panel daftar
+local lostChildPanel = Instance.new("ScrollingFrame", secAI)
+lostChildPanel.Size = UDim2.new(1, 0, 0, 180)
+lostChildPanel.BackgroundColor3 = Color3.fromRGB(24, 24, 30)
+lostChildPanel.BorderSizePixel = 0
+lostChildPanel.ScrollBarThickness = 5
+lostChildPanel.ScrollBarImageColor3 = Color3.fromRGB(100, 100, 130)
+lostChildPanel.CanvasSize = UDim2.new(0, 0, 0, 0)
+Instance.new("UICorner", lostChildPanel).CornerRadius = UDim.new(0, 6)
+
+local lostLayout = Instance.new("UIListLayout", lostChildPanel)
+lostLayout.Padding = UDim.new(0, 3)
+lostLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    lostChildPanel.CanvasSize = UDim2.new(0, 0, 0, lostLayout.AbsoluteContentSize.Y + 8)
+end)
+
+-- Fungsi teleport ke Lost Child tertentu
+local function tpToLostChild(entry)
+    local myRoot = character and character:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return false end
+    if not entry.pivot or not entry.pivot.Parent then return false end
+    myRoot.CFrame = CFrame.new(entry.pivot.Position + Vector3.new(0, 3.5, 0))
+    return true
+end
+
+-- Isi panel
+local function fillLostChildPanel()
+    for _, child in ipairs(lostChildPanel:GetChildren()) do
+        if child:IsA("Frame") then child:Destroy() end
+    end
+
+    local list = lostChildState.list
+    if #list == 0 then
+        local lbl = Instance.new("TextLabel", lostChildPanel)
+        lbl.Size = UDim2.new(1, 0, 0, 28)
+        lbl.BackgroundTransparency = 1
+        lbl.TextColor3 = Color3.fromRGB(180, 80, 80)
+        lbl.Font = Enum.Font.Gotham
+        lbl.TextSize = 12
+        lbl.Text = "  Tidak ada Lost Child ditemukan"
         return
     end
-    
-    nameCollectState.running = true
-    nameToggleBtn.Text = "⏸ Running..."
-    nameStopBtn.Visible = true
-    
+
+    for i, entry in ipairs(list) do
+        local row = Instance.new("Frame", lostChildPanel)
+        row.Size = UDim2.new(1, -6, 0, 32)
+        row.BackgroundColor3 = Color3.fromRGB(34, 34, 44)
+        row.BorderSizePixel = 0
+        Instance.new("UICorner", row).CornerRadius = UDim.new(0, 5)
+
+        local nameLbl = Instance.new("TextLabel", row)
+        nameLbl.Size = UDim2.new(0.6, 0, 1, 0)
+        nameLbl.Position = UDim2.new(0, 4, 0, 0)
+        nameLbl.BackgroundTransparency = 1
+        nameLbl.TextColor3 = Color3.fromRGB(240, 220, 100)
+        nameLbl.Font = Enum.Font.Gotham
+        nameLbl.TextSize = 12
+        nameLbl.TextXAlignment = Enum.TextXAlignment.Left
+        nameLbl.Text = string.format("[%d] %s", i, entry.name)
+
+        local distLbl = Instance.new("TextLabel", row)
+        distLbl.Size = UDim2.new(0.2, 0, 1, 0)
+        distLbl.Position = UDim2.new(0.6, 0, 0, 0)
+        distLbl.BackgroundTransparency = 1
+        distLbl.TextColor3 = Color3.fromRGB(140, 200, 140)
+        distLbl.Font = Enum.Font.Gotham
+        distLbl.TextSize = 10
+        local myRoot = character and character:FindFirstChild("HumanoidRootPart")
+        local dist = myRoot and entry.pivot.Parent and math.floor((myRoot.Position - entry.pivot.Position).Magnitude) or "?"
+        distLbl.Text = tostring(dist) .. "st"
+
+        local tpBtn = Instance.new("TextButton", row)
+        tpBtn.Size = UDim2.new(0.2, 0, 0.8, 0)
+        tpBtn.Position = UDim2.new(0.8, 0, 0.1, 0)
+        tpBtn.Text = "TP"
+        tpBtn.BackgroundColor3 = Color3.fromRGB(60, 130, 230)
+        tpBtn.TextColor3 = Color3.new(1,1,1)
+        tpBtn.Font = Enum.Font.GothamBold
+        tpBtn.TextSize = 11
+        Instance.new("UICorner", tpBtn).CornerRadius = UDim.new(0, 4)
+
+        tpBtn.MouseButton1Click:Connect(function()
+            if tpToLostChild(entry) then
+                tpBtn.BackgroundColor3 = Color3.fromRGB(40, 160, 40)
+                task.delay(1.2, function()
+                    tpBtn.BackgroundColor3 = Color3.fromRGB(60, 130, 230)
+                end)
+            else
+                tpBtn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
+                task.delay(1.2, function()
+                    tpBtn.BackgroundColor3 = Color3.fromRGB(60, 130, 230)
+                end)
+            end
+        end)
+    end
+end
+
+-- Tombol Scan
+local scanLostBtn = makeButton(secAI, "🔍 Scan Lost Children", Color3.fromRGB(60, 130, 200))
+scanLostBtn.MouseButton1Click:Connect(function()
+    lostStatusLabel.Text = "⏳ Scanning..."
+    lostChildState.list = scanLostChildren()
+    fillLostChildPanel()
+    lostStatusLabel.Text = string.format("✅ %d Lost Child ditemukan", #lostChildState.list)
+end)
+
+-- Tombol TP All (berurutan)
+local tpAllLostBtn = makeButton(secAI, "▶ TP Semua (Loop)", Color3.fromRGB(180, 80, 220))
+local stopLostBtn = makeButton(secAI, "⏹ STOP", Color3.fromRGB(180, 40, 40))
+stopLostBtn.Visible = false
+
+tpAllLostBtn.MouseButton1Click:Connect(function()
+    if lostChildState.running then
+        lostChildState.running = false
+        tpAllLostBtn.Text = "▶ TP Semua (Loop)"
+        stopLostBtn.Visible = false
+        lostStatusLabel.Text = "Berhenti"
+        return
+    end
+
+    if #lostChildState.list == 0 then
+        lostStatusLabel.Text = "❌ Scan dulu sebelum TP All!"
+        return
+    end
+
+    lostChildState.running = true
+    tpAllLostBtn.Text = "⏸ TP All Running..."
+    stopLostBtn.Visible = true
+
     task.spawn(function()
-        local collected = 0
-        while nameCollectState.running do
-            local foundAny = false
-            for _, obj in ipairs(workspace:GetDescendants()) do
-                if not nameCollectState.running then break end
-                if obj.Name == nameCollectState.targetName then
-                    local ok, method = interactWithInstance(obj)
-                    if ok then
-                        collected = collected + 1
-                        nameCollectStatusLabel.Text = string.format("✅ %s → %s (#%d)", obj.Name, method, collected)
-                        foundAny = true
-                        break
-                    end
+        while lostChildState.running do
+            for i, entry in ipairs(lostChildState.list) do
+                if not lostChildState.running then break end
+                if not entry.pivot or not entry.pivot.Parent then
+                    lostStatusLabel.Text = string.format("⚠️ %s sudah hilang", entry.name)
+                    continue
                 end
+                local success = tpToLostChild(entry)
+                if success then
+                    lostStatusLabel.Text = string.format("✈️ TP %s (%d/%d)", entry.name, i, #lostChildState.list)
+                else
+                    lostStatusLabel.Text = "❌ Gagal TP " .. entry.name
+                end
+                task.wait(lostChildState.delay)
             end
-            if not foundAny then
-                nameCollectStatusLabel.Text = "⏳ Menunggu \"" .. nameCollectState.targetName .. "\"..."
-            end
-            task.wait(0.3)
+            lostStatusLabel.Text = "✅ Selesai satu putaran. Mulai lagi..."
         end
+        tpAllLostBtn.Text = "▶ TP Semua (Loop)"
+        stopLostBtn.Visible = false
+        lostStatusLabel.Text = "Berhenti"
     end)
 end)
 
-nameStopBtn.MouseButton1Click:Connect(function()
-    nameCollectState.running = false
-    nameToggleBtn.Text = "▶ Start Collect by Name"
-    nameStopBtn.Visible = false
-    nameCollectStatusLabel.Text = "Status: Berhenti"
+stopLostBtn.MouseButton1Click:Connect(function()
+    lostChildState.running = false
+    tpAllLostBtn.Text = "▶ TP Semua (Loop)"
+    stopLostBtn.Visible = false
+    lostStatusLabel.Text = "Berhenti"
 end)
 
-makeLabel(secAI, "💡 Tips: Nama bisa berupa Model utuh atau bagian seperti 'main'.\n   Jika Diamond berupa Model, gunakan nama Model-nya (misal 'Diamond').")
+makeLabel(secAI, "💡 Tips: Gunakan fitur ini untuk berpindah antar Lost Child dengan cepat.")
 
 -- =============== REMOTE SNIFFER & CODE COPIER (SAFE VERSION) ===============
 makeLabel(secAI, "━━━━━━ 🕵️ REMOTE SNIFFER (SAFE) ━━━━━━")
