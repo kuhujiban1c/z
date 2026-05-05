@@ -1592,7 +1592,7 @@ end)
 makeLabel(secAI, "━━━━━━ 💣 EXPLOIT INVENTORY (v3 Debug) ━━━━━━")
 
 local exploitState = {
-    itemName = "TestItem",
+    itemName = "Fuel Canister",
     spamCount = 10,
 }
 
