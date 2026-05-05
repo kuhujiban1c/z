@@ -1364,121 +1364,124 @@ autoCollectBtn.MouseButton1Click:Connect(function()
 	end
 end)
 
--- =============== REMOTE SNIFFER & CODE COPIER (AI TOOLS) ===============
-makeLabel(secAI, "━━━━━━ 🕵️ REMOTE SNIFFER ━━━━━━")
+-- =============== REMOTE SNIFFER & CODE COPIER (SAFE VERSION) ===============
+makeLabel(secAI, "━━━━━━ 🕵️ REMOTE SNIFFER (SAFE) ━━━━━━")
 
 local snifferState = {
-    remotes = {},                -- { object, path, type, arguments = {} }
+    remotes = {},                -- { object, path, type, arguments = {}, clientCalls = {} }
     isHooking = false,
     hookConnection = nil,
+    spyConnections = {},        -- koneksi OnClientEvent untuk mendengar server
 }
 
--- Fungsi untuk mendapatkan path aman sebuah instance
-local function getPath(obj)
+-- Fungsi path aman
+local function getPathSafe(obj)
     local path = obj.Name
     local parent = obj.Parent
     while parent and parent ~= game do
         path = parent.Name .. "." .. path
         parent = parent.Parent
     end
-    return game:GetService(parent and parent.ClassName or "") .. "." .. path
+    return (parent and parent.ClassName or "game") .. "." .. path
 end
 
--- Scan semua remote yang bisa diakses client
+-- Scan semua remote
 local function scanAllRemotes()
+    snifferState.remotes = {}
     local remotes = {}
-    -- Cari di seluruh game
     for _, obj in ipairs(game:GetDescendants()) do
         if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
-            local path = getPath(obj)
+            local path = getPathSafe(obj)
             table.insert(remotes, {
                 object = obj,
                 path = path,
                 type = obj.ClassName,
-                arguments = {}
+                arguments = {},       -- client -> server (harus manual input)
+                serverCalls = {},     -- server -> client (tertangkap)
+                spyConnection = nil,
             })
         end
     end
-    -- Gabungkan dengan hook
+    -- Simpan di state
     for _, r in ipairs(remotes) do
-        if not snifferState.remotes[r.path] then
-            snifferState.remotes[r.path] = r
-        end
+        snifferState.remotes[r.path] = r
     end
     return remotes
 end
 
--- Hook __namecall untuk menangkap FireServer / InvokeServer
-local function startSnifferHook()
-    if snifferState.isHooking then return end
-    snifferState.isHooking = true
-
-    local mt = getrawmetatable(game)
-    local oldNamecall = mt.__namecall
-    setreadonly(mt, false)
-
-    mt.__namecall = newcclosure(function(self, ...)
-        local method = getnamecallmethod()
-        local args = {...}
-
-        if (self:IsA("RemoteEvent") and method == "FireServer") or
-           (self:IsA("RemoteFunction") and method == "InvokeServer") then
-            local path = getPath(self)
-            if snifferState.remotes[path] then
-                -- Simpan argumen terbaru (max 10)
-                table.insert(snifferState.remotes[path].arguments, args)
-                if #snifferState.remotes[path].arguments > 10 then
-                    table.remove(snifferState.remotes[path].arguments, 1)
-                end
-            end
+-- Inject Spy: buat koneksi OnClientEvent untuk semua remote yang ditemukan
+local function injectSpyOnClientEvents()
+    -- Bersihkan spy lama
+    for _, r in pairs(snifferState.remotes) do
+        if r.spyConnection then
+            r.spyConnection:Disconnect()
+            r.spyConnection = nil
         end
-
-        return oldNamecall(self, ...)
-    end)
-
-    setreadonly(mt, true)
+    end
+    for _, r in pairs(snifferState.remotes) do
+        if r.object:IsA("RemoteEvent") then
+            local conn
+            conn = r.object.OnClientEvent:Connect(function(...)
+                local args = {...}
+                table.insert(r.serverCalls, args)
+                if #r.serverCalls > 10 then
+                    table.remove(r.serverCalls, 1)
+                end
+            end)
+            r.spyConnection = conn
+        elseif r.object:IsA("RemoteFunction") then
+            local conn
+            conn = r.object.OnClientInvoke:Connect(function(...)
+                local args = {...}
+                table.insert(r.serverCalls, args)
+                if #r.serverCalls > 10 then
+                    table.remove(r.serverCalls, 1)
+                end
+            end)
+            r.spyConnection = conn
+        end
+    end
 end
 
--- Fungsi untuk menghentikan hook
-local function stopSnifferHook()
-    if not snifferState.isHooking then return end
-    local mt = getrawmetatable(game)
-    setreadonly(mt, false)
-    mt.__namecall = nil -- Kembalikan ke default, hati-hati bisa rusak
-    setreadonly(mt, true)
-    snifferState.isHooking = false
-end
-
--- UI Panel
+-- UI Elements
 local snifferStatusLabel = makeLabel(secAI, "Status: Idle")
 snifferStatusLabel.TextColor3 = Color3.fromRGB(160, 200, 255)
 
--- Scan Remote Button
+-- Tombol Scan
 local scanRemotesBtn = makeButton(secAI, "🔍 Scan Remotes", Color3.fromRGB(60, 130, 200))
 scanRemotesBtn.MouseButton1Click:Connect(function()
     snifferStatusLabel.Text = "⏳ Scanning..."
-    local remotes = scanAllRemotes()
-    snifferStatusLabel.Text = string.format("✅ %d remote ditemukan", #remotes)
+    scanAllRemotes()
+    local count = 0
+    for _, _ in pairs(snifferState.remotes) do count = count + 1 end
+    snifferStatusLabel.Text = string.format("✅ %d remote ditemukan", count)
     updateSnifferList()
 end)
 
--- Start/Stop Hook Button
-local toggleHookBtn = makeButton(secAI, "▶ Start Hook (Capture Args)", Color3.fromRGB(100, 180, 100))
-toggleHookBtn.MouseButton1Click:Connect(function()
-    if snifferState.isHooking then
-        stopSnifferHook()
-        toggleHookBtn.Text = "▶ Start Hook (Capture Args)"
-        snifferStatusLabel.Text = "Hook dihentikan"
-    else
-        startSnifferHook()
-        toggleHookBtn.Text = "⏸ Stop Hook"
-        snifferStatusLabel.Text = "🔴 Hook aktif - memantau pemanggilan remote"
-    end
+-- Tombol Inject Spy (dengar panggilan server -> client)
+local injectSpyBtn = makeButton(secAI, "🕵️ Inject Spy", Color3.fromRGB(100, 180, 100))
+injectSpyBtn.MouseButton1Click:Connect(function()
+    injectSpyOnClientEvents()
+    snifferStatusLabel.Text = "🔴 Spy aktif - mendengarkan server calls"
 end)
 
--- List Panel untuk remote
+-- Tombol Clear
+local clearSnifferBtn = makeButton(secAI, "🗑️ Clear", Color3.fromRGB(100, 100, 100))
+clearSnifferBtn.MouseButton1Click:Connect(function()
+    for _, r in pairs(snifferState.remotes) do
+        if r.spyConnection then
+            r.spyConnection:Disconnect()
+            r.spyConnection = nil
+        end
+    end
+    snifferState.remotes = {}
+    updateSnifferList()
+    snifferStatusLabel.Text = "Data dibersihkan"
+end)
+
+-- Panel daftar
 local snifferListPanel = Instance.new("ScrollingFrame", secAI)
-snifferListPanel.Size = UDim2.new(1, 0, 0, 160)
+snifferListPanel.Size = UDim2.new(1, 0, 0, 180)
 snifferListPanel.BackgroundColor3 = Color3.fromRGB(22, 22, 30)
 snifferListPanel.BorderSizePixel = 0
 snifferListPanel.ScrollBarThickness = 5
@@ -1487,13 +1490,13 @@ snifferListPanel.CanvasSize = UDim2.new(0, 0, 0, 0)
 Instance.new("UICorner", snifferListPanel).CornerRadius = UDim.new(0, 6)
 
 local snifferListLayout = Instance.new("UIListLayout", snifferListPanel)
-snifferListLayout.Padding = UDim.new(0, 3)
+snifferListLayout.Padding = UDim.new(0, 4)
 snifferListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-    snifferListPanel.CanvasSize = UDim2.new(0, 0, 0, snifferListLayout.AbsoluteContentSize.Y + 8)
+    snifferListPanel.CanvasSize = UDim2.new(0, 0, 0, snifferListLayout.AbsoluteContentSize.Y + 10)
 end)
 
--- Update tampilan daftar remote
 function updateSnifferList()
+    -- Bersihkan
     for _, child in ipairs(snifferListPanel:GetChildren()) do
         if child:IsA("Frame") then child:Destroy() end
     end
@@ -1506,22 +1509,17 @@ function updateSnifferList()
 
     for _, r in ipairs(sorted) do
         local row = Instance.new("Frame", snifferListPanel)
-        row.Size = UDim2.new(1, -6, 0, 40)
+        row.Size = UDim2.new(1, -4, 0, 50)
         row.BackgroundColor3 = (r.type == "RemoteEvent") and Color3.fromRGB(30,30,50) or Color3.fromRGB(50,30,30)
         row.BorderSizePixel = 0
         Instance.new("UICorner", row).CornerRadius = UDim.new(0, 5)
 
-        local info = r.path .. " [" .. r.type .. "]"
-        if #r.arguments > 0 then
-            -- Tampilkan argumen terbaru
-            local lastArgs = r.arguments[#r.arguments]
-            local argsStr = ""
-            for i, a in ipairs(lastArgs) do
-                argsStr = argsStr .. tostring(a):sub(1,30) .. (i < #lastArgs and ", " or "")
-            end
-            info = info .. "\nArgs: " .. argsStr
+        local info = r.path .. " [" .. r.type .. "]\n"
+        if #r.serverCalls > 0 then
+            local lastCall = r.serverCalls[#r.serverCalls]
+            info = info .. "S→C: " .. table.concat(lastCall, ", "):sub(1,80)
         else
-            info = info .. "\nArgs: (no capture)"
+            info = info .. "S→C: (none)"
         end
 
         local infoLbl = Instance.new("TextLabel", row)
@@ -1531,9 +1529,10 @@ function updateSnifferList()
         infoLbl.Font = Enum.Font.Code
         infoLbl.TextSize = 10
         infoLbl.TextXAlignment = Enum.TextXAlignment.Left
+        infoLbl.TextYAlignment = Enum.TextYAlignment.Top
         infoLbl.Text = info
 
-        -- Tombol copy path
+        -- Copy path button
         local copyBtn = Instance.new("TextButton", row)
         copyBtn.Size = UDim2.new(0.15, 0, 1, 0)
         copyBtn.Position = UDim2.new(0.85, 0, 0, 0)
@@ -1545,43 +1544,48 @@ function updateSnifferList()
         Instance.new("UICorner", copyBtn).CornerRadius = UDim.new(0, 4)
         copyBtn.MouseButton1Click:Connect(function()
             pcall(function()
-                setclipboard(r.path)
+                if setclipboard then
+                    setclipboard(r.path)
+                    snifferStatusLabel.Text = "📋 Path disalin: " .. r.path
+                else
+                    snifferStatusLabel.Text = "⚠️ Clipboard not available"
+                end
             end)
-            snifferStatusLabel.Text = "📋 Path disalin: " .. r.path
         end)
     end
+    snifferListPanel.CanvasSize = UDim2.new(0, 0, 0, snifferListLayout.AbsoluteContentSize.Y + 10)
 end
 
--- Tombol Copy All Info
+-- Copy All Info (siap kirim ke developer)
 local copyAllBtn = makeStyledButton(secAI, "📤 Copy All Remote Info", Color3.fromRGB(80, 80, 180))
 copyAllBtn.MouseButton1Click:Connect(function()
     local fullText = ""
     for _, r in pairs(snifferState.remotes) do
         fullText = fullText .. r.path .. " (" .. r.type .. ")\n"
-        if #r.arguments > 0 then
-            fullText = fullText .. "   Contoh Args: "
-            local lastArgs = r.arguments[#r.arguments]
-            for i, a in ipairs(lastArgs) do
-                fullText = fullText .. tostring(a) .. (i < #lastArgs and ", " or "")
-            end
-            fullText = fullText .. "\n"
+        if #r.serverCalls > 0 then
+            fullText = fullText .. "   S→C Args: "
+            local lastCall = r.serverCalls[#r.serverCalls]
+            fullText = fullText .. table.concat(lastCall, ", ") .. "\n"
         else
-            fullText = fullText .. "   (belum ada capture)\n"
+            fullText = fullText .. "   S→C Args: (no data)\n"
         end
     end
+    if fullText == "" then
+        snifferStatusLabel.Text = "⚠️ Tidak ada data untuk disalin"
+        return
+    end
+    -- Fallback: tampilkan di output box agar user bisa select & copy
     pcall(function()
-        setclipboard(fullText)
+        if setclipboard then
+            setclipboard(fullText)
+            snifferStatusLabel.Text = "✅ Semua info remote disalin ke clipboard"
+        else
+            snifferStatusLabel.Text = "📋 Klik kanan > Select All (data di output Developer)"
+            print("=== COPY START ===")
+            print(fullText)
+            print("=== COPY END ===")
+        end
     end)
-    snifferStatusLabel.Text = "✅ Semua info remote disalin ke clipboard"
-end)
-
--- Tombol Stop Hook (opsional, sudah ada toggle)
--- Tombol Clear
-local clearSnifferBtn = makeButton(secAI, "🗑️ Clear Data", Color3.fromRGB(100, 100, 100))
-clearSnifferBtn.MouseButton1Click:Connect(function()
-    snifferState.remotes = {}
-    updateSnifferList()
-    snifferStatusLabel.Text = "Data dibersihkan"
 end)
 
 -- =============== DEVELOPER ===============
