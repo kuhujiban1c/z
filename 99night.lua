@@ -2124,6 +2124,79 @@ clearAnalyzerBtn.MouseButton1Click:Connect(function()
     analyzerStatusLabel.Text = "Status: Siap"
 end)
 
+-- =============== STRONGHOLD EXPLOIT (AI TOOLS) ===============
+makeLabel(secAI, "━━━━━━ 🏰 STRONGHOLD EXPLOIT ━━━━━━")
+
+local strongholdState = {
+    spamCount = 5
+}
+
+makeSlider(secAI, "Jumlah Spam", 1, 20, strongholdState.spamCount, function(v)
+    strongholdState.spamCount = v
+end)
+
+local strongholdStatusLabel = makeLabel(secAI, "Status: Idle")
+strongholdStatusLabel.TextColor3 = Color3.fromRGB(255, 200, 100)
+
+-- Fungsi mencari remote dari Sniffer dulu, lalu global
+local function findRemote(name)
+    -- Cek di Sniffer
+    if snifferState and snifferState.remotes then
+        for _, data in pairs(snifferState.remotes) do
+            if data.object and data.object.Name == name then
+                return data.object
+            end
+        end
+    end
+    -- Fallback global
+    for _, obj in ipairs(game:GetDescendants()) do
+        if (obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction")) and obj.Name == name then
+            return obj
+        end
+    end
+    return nil
+end
+
+-- Fungsi spam
+local function spamStrongholdRemote(remoteName)
+    local remote = findRemote(remoteName)
+    if not remote then
+        strongholdStatusLabel.Text = "❌ Remote " .. remoteName .. " tidak ditemukan"
+        return
+    end
+
+    local method = remote:IsA("RemoteFunction") and "InvokeServer" or "FireServer"
+    local success = 0
+    local fails = 0
+
+    for _ = 1, strongholdState.spamCount do
+        task.spawn(function()
+            local ok, err = pcall(function()
+                remote[method](remote)
+            end)
+            if ok then success = success + 1 else fails = fails + 1 end
+        end)
+    end
+    task.wait(0.2)
+    strongholdStatusLabel.Text = string.format("✅ %s: %d ok, %d gagal", remoteName, success, fails)
+end
+
+-- Tombol untuk StrongholdComplete
+local completeBtn = makeStyledButton(secAI, "✅ Spam StrongholdComplete", Color3.fromRGB(200, 150, 50))
+completeBtn.MouseButton1Click:Connect(function()
+    strongholdStatusLabel.Text = "⏳ Spamming StrongholdComplete..."
+    spamStrongholdRemote("StrongholdComplete")
+end)
+
+-- Tombol untuk StrongholdOpenGate
+local openGateBtn = makeStyledButton(secAI, "🔓 Spam StrongholdOpenGate", Color3.fromRGB(150, 100, 200))
+openGateBtn.MouseButton1Click:Connect(function()
+    strongholdStatusLabel.Text = "⏳ Spamming StrongholdOpenGate..."
+    spamStrongholdRemote("StrongholdOpenGate")
+end)
+
+makeLabel(secAI, "💡 Pastikan sudah Scan Remotes agar remote terdeteksi.")
+
 -- =============== DEVELOPER ===============
 local execContainer = Instance.new("Frame", secDeveloper)
 execContainer.Size               = UDim2.new(1, 0, 0, 230)
