@@ -1337,32 +1337,286 @@ scanBtn.MouseButton1Click:Connect(function()
 	end)
 end)
 
--- Auto Collect Items
-local autoCollectBtn = makeButton(secAI, "Auto Collect Items: OFF")
-autoCollectBtn.MouseButton1Click:Connect(function()
-	aiState.autoCollect = not aiState.autoCollect
-	autoCollectBtn.Text = aiState.autoCollect and "Auto Collect: ON 💰" or "Auto Collect: OFF"
-	if aiState.autoCollect then
-		task.spawn(function()
-			while aiState.autoCollect do
-				task.wait(0.5)
-				local myRoot = character and character:FindFirstChild("HumanoidRootPart")
-				if not myRoot then continue end
-				for _, obj in ipairs(workspace:GetDescendants()) do
-					if (obj:IsA("BasePart") and obj.Name == "Loot")
-					or (obj:IsA("Tool") and obj.CanBeDropped) then
-						local pos = obj:IsA("BasePart") and obj.Position or obj:GetPivot().Position
-						local dist = (myRoot.Position - pos).Magnitude
-						if dist < 8 then
-							myRoot.CFrame = CFrame.new(pos + Vector3.new(0, 3, 0))
-							task.wait(0.1)
-						end
-					end
-				end
-			end
-		end)
-	end
+-- =============== AUTO COLLECT DIAMOND (ENHANCED) ===============
+makeLabel(secAI, "━━━━━━ 💎 AUTO COLLECT DIAMOND ━━━━━━")
+
+local diamondState = {
+    enabled = false,
+    collectRange = 15,          -- jarak deteksi (studs)
+    teleportMode = true,        -- true = teleport, false = jalan
+    collectOnlyUnlocked = false, -- hanya yang belum diinteraksi
+    targetNames = {             -- daftar nama objek yang dianggap Diamond
+        "Diamond",
+        "Diamond Ore", 
+        "Diamond Gem",
+        "Raw Diamond",
+        "Diamond Crystal",
+        "Diamond Pickup",
+        "DiamondPiece",
+        "Diamond Node",
+        "Diamond Deposit",
+    },
+    collectCount = 0,
+    lastCollectTime = 0,
+    cooldown = 0.1,             -- jeda antar collect (detik)
+}
+
+-- Status label
+local diamondStatusLabel = makeLabel(secAI, "Status: OFF")
+diamondStatusLabel.TextColor3 = Color3.fromRGB(100, 255, 200)
+
+-- Counter label
+local diamondCounterLabel = makeLabel(secAI, "💎 Collected: 0")
+diamondCounterLabel.TextColor3 = Color3.fromRGB(200, 200, 100)
+
+-- Range slider
+makeSlider(secAI, "Collect Range (studs)", 5, 50, diamondState.collectRange, function(v)
+    diamondState.collectRange = v
 end)
+
+-- Cooldown slider
+makeSlider(secAI, "Cooldown (detik)", 0.05, 1.0, diamondState.cooldown, function(v)
+    diamondState.cooldown = v
+end)
+
+-- Toggle Teleport/Walk
+local toggleModeBtn = makeButton(secAI, "Mode: Teleport", Color3.fromRGB(100, 100, 200))
+toggleModeBtn.MouseButton1Click:Connect(function()
+    diamondState.teleportMode = not diamondState.teleportMode
+    toggleModeBtn.Text = diamondState.teleportMode and "Mode: Teleport ⚡" or "Mode: Walk 🚶"
+end)
+
+-- Toggle Unlocked Only
+local toggleUnlockedBtn = makeButton(secAI, "Unlocked Only: OFF", Color3.fromRGB(100, 150, 100))
+toggleUnlockedBtn.MouseButton1Click:Connect(function()
+    diamondState.collectOnlyUnlocked = not diamondState.collectOnlyUnlocked
+    toggleUnlockedBtn.Text = diamondState.collectOnlyUnlocked and "Unlocked Only: ON 🔓" or "Unlocked Only: OFF"
+end)
+
+-- Fungsi deteksi Diamond
+local function isDiamond(obj)
+    local name = obj.Name
+    -- Cek apakah nama cocok dengan daftar target
+    for _, target in ipairs(diamondState.targetNames) do
+        if name:lower():find(target:lower()) then
+            return true
+        end
+    end
+    -- Cek atribut (beberapa game pakai atribut)
+    local itemType = obj:GetAttribute("ItemType") or obj:GetAttribute("Type") or ""
+    if itemType:lower():find("diamond") then
+        return true
+    end
+    -- Cek display name (untuk Tool)
+    if obj:IsA("Tool") and obj.ToolTip and obj.ToolTip:lower():find("diamond") then
+        return true
+    end
+    return false
+end
+
+-- Fungsi cek apakah objek sudah diinteraksi (terkunci)
+local function isInteracted(obj)
+    local interacted = obj:GetAttribute("InteractedWith")
+    if interacted ~= nil then
+        return interacted == true or interacted == "true"
+    end
+    -- Fallback: cek di parent Model
+    if obj.Parent and obj.Parent:IsA("Model") then
+        local parentInteracted = obj.Parent:GetAttribute("InteractedWith")
+        if parentInteracted ~= nil then
+            return parentInteracted == true or parentInteracted == "true"
+        end
+    end
+    return false
+end
+
+-- Fungsi ambil posisi objek (support BasePart, Model, Tool)
+local function getObjectPosition(obj)
+    if obj:IsA("BasePart") then
+        return obj.Position
+    elseif obj:IsA("Model") then
+        local primary = obj.PrimaryPart
+        if primary then return primary.Position end
+        for _, child in ipairs(obj:GetChildren()) do
+            if child:IsA("BasePart") then return child.Position end
+        end
+        return obj:GetPivot().Position
+    elseif obj:IsA("Tool") then
+        local handle = obj:FindFirstChild("Handle")
+        if handle then return handle.Position end
+        return obj:GetPivot().Position
+    end
+    return obj:GetPivot().Position
+end
+
+-- Fungsi untuk mencoba mengambil Diamond (teleport atau jalan)
+local function collectDiamond(obj)
+    local myRoot = character and character:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return false end
+    
+    local pos = getObjectPosition(obj)
+    local dist = (myRoot.Position - pos).Magnitude
+    
+    if dist > diamondState.collectRange then return false end
+    
+    if diamondState.teleportMode then
+        -- Mode Teleport: langsung pindah ke posisi
+        myRoot.CFrame = CFrame.new(pos + Vector3.new(0, 3, 0))
+    else
+        -- Mode Walk: gerakkan karakter (lebih natural)
+        if humanoid then
+            humanoid:MoveTo(pos)
+        end
+    end
+    
+    -- Coba ambil dengan berbagai metode
+    pcall(function()
+        -- Metode 1: Klik objek (simulasi interaksi)
+        if obj:IsA("ClickDetector") or obj:FindFirstChild("ClickDetector") then
+            local cd = obj:IsA("ClickDetector") and obj or obj.ClickDetector
+            fireclickdetector(cd)
+        end
+        
+        -- Metode 2: Equip jika Tool
+        if obj:IsA("Tool") and obj.CanBeDropped and humanoid then
+            obj.Parent = player.Backpack
+            humanoid:EquipTool(obj)
+        end
+        
+        -- Metode 3: Sentuh dengan RootPart (trigger touch interest)
+        if obj:IsA("BasePart") then
+            firetouchinterest(myRoot, obj, 0) -- sentuh
+        end
+    end)
+    
+    return true
+end
+
+-- Main loop Auto Collect
+local diamondLoop
+
+local function startDiamondCollect()
+    diamondLoop = task.spawn(function()
+        while diamondState.enabled do
+            task.wait(diamondState.cooldown)
+            
+            if not character or not humanoid then
+                character, humanoid = getCharHum()
+            end
+            
+            local myRoot = character and character:FindFirstChild("HumanoidRootPart")
+            if not myRoot then continue end
+            
+            -- Cari semua Diamond dalam range
+            local diamonds = {}
+            for _, obj in ipairs(workspace:GetDescendants()) do
+                -- Cek berbagai tipe objek
+                if obj:IsA("BasePart") or obj:IsA("Tool") or obj:IsA("Model") then
+                    if isDiamond(obj) then
+                        -- Filter unlocked only
+                        if diamondState.collectOnlyUnlocked and isInteracted(obj) then
+                            continue
+                        end
+                        local pos = getObjectPosition(obj)
+                        local dist = (myRoot.Position - pos).Magnitude
+                        if dist <= diamondState.collectRange then
+                            table.insert(diamonds, {obj = obj, dist = dist, pos = pos})
+                        end
+                    end
+                end
+            end
+            
+            -- Urutkan berdasarkan jarak terdekat
+            table.sort(diamonds, function(a, b) return a.dist < b.dist end)
+            
+            -- Ambil satu per satu (yang terdekat dulu)
+            for _, diamond in ipairs(diamonds) do
+                if not diamondState.enabled then break end
+                
+                local success = collectDiamond(diamond.obj)
+                if success then
+                    diamondState.collectCount = diamondState.collectCount + 1
+                    diamondState.lastCollectTime = tick()
+                    diamondCounterLabel.Text = "💎 Collected: " .. diamondState.collectCount
+                    diamondStatusLabel.Text = string.format(
+                        "✅ Collected %s (%.1f studs)", 
+                        diamond.obj.Name, 
+                        diamond.dist
+                    )
+                    
+                    -- Beri jeda antar collect
+                    task.wait(diamondState.cooldown)
+                end
+            end
+        end
+    end)
+end
+
+-- Tombol utama: Start/Stop
+local autoDiamondBtn = makeStyledButton(secAI, "💎 Auto Collect Diamond: OFF", Color3.fromRGB(0, 200, 200))
+autoDiamondBtn.MouseButton1Click:Connect(function()
+    diamondState.enabled = not diamondState.enabled
+    
+    if diamondState.enabled then
+        autoDiamondBtn.Text = "💎 Auto Collect Diamond: ON ⚡"
+        diamondStatusLabel.Text = "🔍 Mencari Diamond..."
+        startDiamondCollect()
+    else
+        autoDiamondBtn.Text = "💎 Auto Collect Diamond: OFF"
+        diamondStatusLabel.Text = "Status: OFF ⏸️"
+        if diamondLoop then
+            task.cancel(diamondLoop)
+            diamondLoop = nil
+        end
+    end
+end)
+
+-- Tombol Reset Counter
+local resetCounterBtn = makeButton(secAI, "🔄 Reset Counter", Color3.fromRGB(80, 80, 80))
+resetCounterBtn.MouseButton1Click:Connect(function()
+    diamondState.collectCount = 0
+    diamondCounterLabel.Text = "💎 Collected: 0"
+    diamondStatusLabel.Text = "Counter direset"
+end)
+
+-- Tombol Scan Diamond (untuk melihat berapa banyak Diamond di sekitar)
+local scanDiamondBtn = makeButton(secAI, "🔍 Scan Diamond Terdekat", Color3.fromRGB(60, 130, 200))
+scanDiamondBtn.MouseButton1Click:Connect(function()
+    local myRoot = character and character:FindFirstChild("HumanoidRootPart")
+    if not myRoot then
+        diamondStatusLabel.Text = "❌ Karakter tidak ditemukan"
+        return
+    end
+    
+    local found = 0
+    local nearestDist = math.huge
+    local nearestName = ""
+    
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if (obj:IsA("BasePart") or obj:IsA("Tool") or obj:IsA("Model")) and isDiamond(obj) then
+            local pos = getObjectPosition(obj)
+            local dist = (myRoot.Position - pos).Magnitude
+            if dist <= diamondState.collectRange then
+                found = found + 1
+                if dist < nearestDist then
+                    nearestDist = dist
+                    nearestName = obj.Name
+                end
+            end
+        end
+    end
+    
+    if found > 0 then
+        diamondStatusLabel.Text = string.format(
+            "🔍 %d Diamond dalam range, terdekat: %s (%.1f studs)", 
+            found, nearestName, nearestDist
+        )
+    else
+        diamondStatusLabel.Text = "❌ Tidak ada Diamond dalam range"
+    end
+end)
+
+makeLabel(secAI, "💡 Tips: Gunakan Scan Diamond dulu untuk cek ketersediaan.")
 
 -- =============== REMOTE SNIFFER & CODE COPIER (SAFE VERSION) ===============
 makeLabel(secAI, "━━━━━━ 🕵️ REMOTE SNIFFER (SAFE) ━━━━━━")
