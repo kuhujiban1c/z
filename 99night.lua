@@ -1784,6 +1784,169 @@ end)
 
 makeLabel(secAI, "⛔ Pastikan klik 'Scan Remotes' dulu jika tombol abu-abu.")
 
+-- =============== GAME ANALYZER & DATA COPIER (AI TOOLS) ===============
+makeLabel(secAI, "━━━━━━ 📊 GAME ANALYZER & COPIER ━━━━━━")
+
+local analyzerState = {
+    fullReport = "",
+}
+
+-- Fungsi untuk mendapatkan semua remote dengan path aman
+local function getPathSafe(obj)
+    local path = obj.Name
+    local parent = obj.Parent
+    while parent and parent ~= game do
+        path = parent.Name .. "." .. path
+        parent = parent.Parent
+    end
+    return (parent and parent.ClassName or "game") .. "." .. path
+end
+
+local function analyzeGame()
+    local report = "=== GAME ANALYSIS REPORT ===\n\n"
+
+    -- Info dasar game
+    report = report .. "PlaceId: " .. (game.PlaceId or "?") .. "\n"
+    report = report .. "Game Name: " .. (game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name or "?") .. "\n\n"
+
+    -- 1. Semua RemoteEvent/RemoteFunction
+    report = report .. "--- REMOTE EVENTS & FUNCTIONS ---\n"
+    local remotes = {}
+    for _, obj in ipairs(game:GetDescendants()) do
+        if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
+            local path = getPathSafe(obj)
+            table.insert(remotes, {obj = obj, path = path, type = obj.ClassName})
+        end
+    end
+    table.sort(remotes, function(a,b) return a.path < b.path end)
+    for _, r in ipairs(remotes) do
+        report = report .. r.path .. " [" .. r.type .. "]\n"
+    end
+    report = report .. "\n"
+
+    -- 2. Model unik di Workspace dengan atribut mencurigakan
+    report = report .. "--- WORKSPACE MODELS (Unique) ---\n"
+    local modelCategories = {}
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj:IsA("Model") then
+            local name = obj.Name
+            if not modelCategories[name] then
+                modelCategories[name] = {count = 0, first = obj}
+            end
+            modelCategories[name].count = modelCategories[name].count + 1
+        end
+    end
+    local sortedNames = {}
+    for name, _ in pairs(modelCategories) do table.insert(sortedNames, name) end
+    table.sort(sortedNames)
+
+    for _, name in ipairs(sortedNames) do
+        local data = modelCategories[name]
+        local sample = data.first
+        local attrs = {}
+        -- Cek atribut penting
+        local owner = sample:GetAttribute("Owner")
+        local lastOwner = sample:GetAttribute("LastOwner")
+        local interacted = sample:GetAttribute("InteractedWith")
+        local burnFuel = sample:GetAttribute("BurnFuel")
+        if owner then attrs["Owner"] = owner end
+        if lastOwner then attrs["LastOwner"] = lastOwner end
+        if interacted ~= nil then attrs["InteractedWith"] = tostring(interacted) end
+        if burnFuel then attrs["BurnFuel"] = burnFuel end
+
+        report = report .. string.format("%s (x%d)", name, data.count)
+        if next(attrs) then
+            report = report .. " | "
+            for k, v in pairs(attrs) do
+                report = report .. k .. "=" .. tostring(v) .. " "
+            end
+        end
+        report = report .. "\n"
+    end
+
+    -- 3. LocalScripts di PlayerGui / StarterGui (potensi anti-cheat)
+    report = report .. "\n--- LOCAL SCRIPTS (PlayerGui/StarterGui) ---\n"
+    local function listScripts(parent, indent)
+        local result = ""
+        for _, child in ipairs(parent:GetChildren()) do
+            if child:IsA("LocalScript") or child:IsA("ModuleScript") then
+                result = result .. string.rep("  ", indent) .. child.Name .. " (" .. child.ClassName .. ")\n"
+            end
+            if child:IsA("Folder") or child:IsA("ScreenGui") or child:IsA("Frame") then
+                result = result .. string.rep("  ", indent) .. child.Name .. "/\n"
+                result = result .. listScripts(child, indent + 1)
+            end
+        end
+        return result
+    end
+    local playerGui = player:WaitForChild("PlayerGui")
+    report = report .. "PlayerGui:\n" .. listScripts(playerGui, 1)
+    local starterGui = game:GetService("StarterGui")
+    report = report .. "StarterGui:\n" .. listScripts(starterGui, 1)
+
+    return report
+end
+
+-- UI Komponen
+local analyzerStatusLabel = makeLabel(secAI, "Status: Siap")
+analyzerStatusLabel.TextColor3 = Color3.fromRGB(160, 200, 255)
+
+-- Tombol Scan
+local scanAnalyzerBtn = makeStyledButton(secAI, "🔍 Scan Game Data", Color3.fromRGB(60, 130, 200))
+scanAnalyzerBtn.MouseButton1Click:Connect(function()
+    analyzerStatusLabel.Text = "⏳ Menganalisis game..."
+    task.spawn(function()
+        local report = analyzeGame()
+        analyzerState.fullReport = report
+        analyzerOutputBox.Text = report
+        analyzerStatusLabel.Text = "✅ Analisis selesai. Klik Copy untuk menyalin."
+    end)
+end)
+
+-- Output box (bisa di-scroll)
+local analyzerOutputBox = Instance.new("TextBox", secAI)
+analyzerOutputBox.Size = UDim2.new(1, 0, 0, 180)
+analyzerOutputBox.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
+analyzerOutputBox.TextColor3 = Color3.new(0.8, 1, 0.8)
+analyzerOutputBox.Font = Enum.Font.Code
+analyzerOutputBox.TextSize = 11
+analyzerOutputBox.TextXAlignment = Enum.TextXAlignment.Left
+analyzerOutputBox.TextYAlignment = Enum.TextYAlignment.Top
+analyzerOutputBox.MultiLine = true
+analyzerOutputBox.Text = "Hasil analisis akan muncul di sini..."
+analyzerOutputBox.BorderSizePixel = 0
+analyzerOutputBox.ClearTextOnFocus = false
+Instance.new("UICorner", analyzerOutputBox).CornerRadius = UDim.new(0, 6)
+
+-- Tombol Copy to Clipboard
+local copyAnalyzerBtn = makeStyledButton(secAI, "📋 Copy Report ke Clipboard", Color3.fromRGB(80, 180, 80))
+copyAnalyzerBtn.MouseButton1Click:Connect(function()
+    if analyzerState.fullReport == "" then
+        analyzerStatusLabel.Text = "❌ Belum ada data. Klik Scan dulu."
+        return
+    end
+    pcall(function()
+        if setclipboard then
+            setclipboard(analyzerState.fullReport)
+            analyzerStatusLabel.Text = "✅ Laporan berhasil disalin ke clipboard!"
+        else
+            -- Fallback: tampilkan di console & instruksi manual
+            print("=== COPY START ===")
+            print(analyzerState.fullReport)
+            print("=== COPY END ===")
+            analyzerStatusLabel.Text = "📋 Buka Console (F9), lalu pilih teks & copy."
+        end
+    end)
+end)
+
+-- Tombol Clear
+local clearAnalyzerBtn = makeButton(secAI, "🗑️ Clear", Color3.fromRGB(100, 100, 100))
+clearAnalyzerBtn.MouseButton1Click:Connect(function()
+    analyzerState.fullReport = ""
+    analyzerOutputBox.Text = ""
+    analyzerStatusLabel.Text = "Status: Siap"
+end)
+
 -- =============== DEVELOPER ===============
 local execContainer = Instance.new("Frame", secDeveloper)
 execContainer.Size               = UDim2.new(1, 0, 0, 230)
