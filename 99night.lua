@@ -1679,31 +1679,29 @@ dupeFireAllBtn.MouseButton1Click:Connect(function()
 		end
 	end)
 end)
+
 -- =============== FUEL CANISTER EXPLOIT (AI TOOLS) ===============
 makeLabel(secAI, "━━━━━━ 🛢️ FUEL CANISTER ━━━━━━")
 
 local fuelState = {
-    canisters = {},          -- { model, remote, owner, lastOwner, interacted, burnFuel }
+    canisters = {},
     selectedCanister = nil,
     spamRunning = false,
     spamCount = 5,
-    remoteName = "Interact", -- fallback nama remote
+    remoteName = "Interact",
 }
 
--- ---- Fungsi pembaca atribut & remote ----
 local function scanFuelCanisters()
     local list = {}
     for _, obj in ipairs(workspace:GetDescendants()) do
         if obj:IsA("Model") and obj.Name == "Fuel Canister" then
             local remote = nil
-            -- Cari RemoteEvent di dalam model (prioritas)
             for _, child in ipairs(obj:GetDescendants()) do
                 if child:IsA("RemoteEvent") then
                     remote = child
                     break
                 end
             end
-            -- Jika tidak ditemukan, coba cari global dengan nama
             if not remote then
                 for _, ev in ipairs(game:GetDescendants()) do
                     if ev:IsA("RemoteEvent") and ev.Name == fuelState.remoteName then
@@ -1712,12 +1710,10 @@ local function scanFuelCanisters()
                     end
                 end
             end
-
             local owner = obj:GetAttribute("Owner") or "?"
             local lastOwner = obj:GetAttribute("LastOwner") or "?"
             local interacted = obj:GetAttribute("InteractedWith") or false
             local burnFuel = obj:GetAttribute("BurnFuel") or 0
-
             table.insert(list, {
                 model = obj,
                 remote = remote,
@@ -1731,7 +1727,6 @@ local function scanFuelCanisters()
     return list
 end
 
--- ---- UI Elements ----
 local fuelStatusLabel = makeLabel(secAI, "Status: Siap")
 fuelStatusLabel.TextColor3 = Color3.fromRGB(160, 200, 255)
 
@@ -1753,7 +1748,6 @@ makeSlider(secAI, "Jumlah Spam", 1, 20, fuelState.spamCount, function(v)
     fuelState.spamCount = v
 end)
 
--- List Canister Panel
 local fuelListPanel = Instance.new("ScrollingFrame", secAI)
 fuelListPanel.Size = UDim2.new(1, 0, 0, 140)
 fuelListPanel.BackgroundColor3 = Color3.fromRGB(24, 24, 30)
@@ -1770,11 +1764,9 @@ fuelListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function(
 end)
 
 local function buildFuelList()
-    -- Clear list
     for _, c in ipairs(fuelListPanel:GetChildren()) do
         if c:IsA("Frame") then c:Destroy() end
     end
-
     local list = fuelState.canisters
     if #list == 0 then
         local lbl = Instance.new("TextLabel", fuelListPanel)
@@ -1786,7 +1778,6 @@ local function buildFuelList()
         lbl.Text = "  Tidak ada Fuel Canister ditemukan"
         return
     end
-
     for i, data in ipairs(list) do
         local row = Instance.new("Frame", fuelListPanel)
         row.Size = UDim2.new(1, -6, 0, 36)
@@ -1794,7 +1785,6 @@ local function buildFuelList()
         row.BorderSizePixel = 0
         Instance.new("UICorner", row).CornerRadius = UDim.new(0, 5)
 
-        -- Info text
         local info = string.format("[%d] Owner:%s Int:%s Fuel:%d",
             i, data.owner, tostring(data.interacted), data.burnFuel)
         local infoLbl = Instance.new("TextLabel", row)
@@ -1807,7 +1797,6 @@ local function buildFuelList()
         infoLbl.TextXAlignment = Enum.TextXAlignment.Left
         infoLbl.Text = info
 
-        -- Select button
         local selBtn = Instance.new("TextButton", row)
         selBtn.Size = UDim2.new(0.12, 0, 0.8, 0)
         selBtn.Position = UDim2.new(0.77, 0, 0.1, 0)
@@ -1822,7 +1811,6 @@ local function buildFuelList()
             fuelStatusLabel.Text = "Dipilih: "..data.model:GetFullName()
         end)
 
-        -- Spam langsung tombol
         local spamBtn = Instance.new("TextButton", row)
         spamBtn.Size = UDim2.new(0.12, 0, 0.8, 0)
         spamBtn.Position = UDim2.new(0.88, -2, 0.1, 0)
@@ -1853,7 +1841,6 @@ local function buildFuelList()
     end
 end
 
--- Tombol Scan
 local scanFuelBtn = makeButton(secAI, "🔍 Scan Fuel Canisters", Color3.fromRGB(60, 130, 200))
 scanFuelBtn.MouseButton1Click:Connect(function()
     fuelStatusLabel.Text = "⏳ Scanning..."
@@ -1862,7 +1849,6 @@ scanFuelBtn.MouseButton1Click:Connect(function()
     fuelStatusLabel.Text = string.format("✅ %d canister ditemukan", #fuelState.canisters)
 end)
 
--- Tombol Spam Semua yang belum InteractedWith
 local spamAllFuelBtn = makeStyledButton(secAI, "💥 Spam Semua (Uninteracted)", Color3.fromRGB(220, 60, 60))
 spamAllFuelBtn.MouseButton1Click:Connect(function()
     local targets = {}
@@ -1885,19 +1871,19 @@ spamAllFuelBtn.MouseButton1Click:Connect(function()
                 end)
             end)
         end
-        task.wait(0.05) -- sedikit jeda antar canister
+        task.wait(0.05)
     end
     wait(0.2)
     fuelState.spamRunning = false
     fuelStatusLabel.Text = "✅ Selesai spam semua"
 end)
 
--- Stop spam (jika diperlukan)
 local stopFuelSpamBtn = makeButton(secAI, "⏹ STOP SPAM", Color3.fromRGB(180, 40, 40))
 stopFuelSpamBtn.MouseButton1Click:Connect(function()
     fuelState.spamRunning = false
     fuelStatusLabel.Text = "⏹ Dihentikan"
 end)
+
 -- =============== DEVELOPER ===============
 local execContainer = Instance.new("Frame", secDeveloper)
 execContainer.Size               = UDim2.new(1, 0, 0, 230)
