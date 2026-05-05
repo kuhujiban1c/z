@@ -1541,101 +1541,209 @@ end)
 
 makeLabel(secAI, "💡 Tips: Gunakan fitur ini untuk berpindah antar Lost Child dengan cepat.")
 
--- =============== TEST ALL REMOTES (AI TOOLS) ===============
-makeLabel(secAI, "━━━━━━ 🧪 TEST ALL REMOTES ━━━━━━")
+-- =============== STRONG AXE TELEPORTER (AI TOOLS) ===============
+makeLabel(secAI, "━━━━━━ 🪓 STRONG AXE TELEPORTER ━━━━━━")
 
-local testAllState = {
+local strongAxeState = {
+    list = {},               -- {model, pivot, name}
     running = false,
-    count = 1,      -- berapa kali panggil per remote
-    success = 0,
-    failed = 0,
-    current = "",
+    delay = 1.5,
 }
 
--- Slider jumlah panggilan
-makeSlider(secAI, "Panggil per remote", 1, 5, testAllState.count, function(v)
-    testAllState.count = v
+-- Scan semua model yang namanya mengandung "Strong Axe"
+local function scanStrongAxes()
+    local found = {}
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj:IsA("Model") and obj.Name:find("Strong Axe") then
+            local pivot = getModelPivot(obj)  -- fungsi dari scanner
+            if pivot then
+                table.insert(found, {
+                    model = obj,
+                    pivot = pivot,
+                    name = obj.Name,
+                })
+            end
+        end
+    end
+    -- Urutkan berdasarkan nama (Strong Axe, Strong Axe2, ...)
+    table.sort(found, function(a,b)
+        local na = a.name:gsub("Strong Axe", "")
+        local nb = b.name:gsub("Strong Axe", "")
+        na = tonumber(na) or 0
+        nb = tonumber(nb) or 0
+        return na < nb
+    end)
+    return found
+end
+
+local axeStatusLabel = makeLabel(secAI, "Status: Belum di-scan")
+axeStatusLabel.TextColor3 = Color3.fromRGB(160, 200, 255)
+
+makeSlider(secAI, "Delay TP (detik)", 1, 5, strongAxeState.delay, function(v)
+    strongAxeState.delay = v
 end)
 
-local testAllStatusLabel = makeLabel(secAI, "Status: Idle")
-testAllStatusLabel.TextColor3 = Color3.fromRGB(255, 200, 100)
+-- Panel daftar
+local axePanel = Instance.new("ScrollingFrame", secAI)
+axePanel.Size = UDim2.new(1, 0, 0, 180)
+axePanel.BackgroundColor3 = Color3.fromRGB(24, 24, 30)
+axePanel.BorderSizePixel = 0
+axePanel.ScrollBarThickness = 5
+axePanel.ScrollBarImageColor3 = Color3.fromRGB(100, 100, 130)
+axePanel.CanvasSize = UDim2.new(0, 0, 0, 0)
+Instance.new("UICorner", axePanel).CornerRadius = UDim.new(0, 6)
 
--- Tombol Start/Stop
-local testAllToggleBtn = makeStyledButton(secAI, "▶ Tes Semua Remote", Color3.fromRGB(200, 120, 50))
-local testAllStopBtn = makeButton(secAI, "⏹ STOP", Color3.fromRGB(200, 80, 80))
-testAllStopBtn.Visible = false
+local axeLayout = Instance.new("UIListLayout", axePanel)
+axeLayout.Padding = UDim.new(0, 3)
+axeLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    axePanel.CanvasSize = UDim2.new(0, 0, 0, axeLayout.AbsoluteContentSize.Y + 8)
+end)
 
-testAllToggleBtn.MouseButton1Click:Connect(function()
-    if testAllState.running then
-        testAllState.running = false
-        testAllToggleBtn.Text = "▶ Tes Semua Remote"
-        testAllStopBtn.Visible = false
-        testAllStatusLabel.Text = "Berhenti"
+-- Fungsi teleport ke Strong Axe tertentu
+local function tpToStrongAxe(entry)
+    local myRoot = character and character:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return false end
+    if not entry.pivot or not entry.pivot.Parent then return false end
+    myRoot.CFrame = CFrame.new(entry.pivot.Position + Vector3.new(0, 3.5, 0))
+    return true
+end
+
+-- Isi panel
+local function fillAxePanel()
+    for _, child in ipairs(axePanel:GetChildren()) do
+        if child:IsA("Frame") then child:Destroy() end
+    end
+
+    local list = strongAxeState.list
+    if #list == 0 then
+        local lbl = Instance.new("TextLabel", axePanel)
+        lbl.Size = UDim2.new(1, 0, 0, 28)
+        lbl.BackgroundTransparency = 1
+        lbl.TextColor3 = Color3.fromRGB(180, 80, 80)
+        lbl.Font = Enum.Font.Gotham
+        lbl.TextSize = 12
+        lbl.Text = "  Tidak ada Strong Axe ditemukan"
         return
     end
 
-    -- Cek apakah Remote Sniffer sudah punya data
-    if not snifferState or not next(snifferState.remotes) then
-        testAllStatusLabel.Text = "❌ Scan Remotes dulu!"
+    for i, entry in ipairs(list) do
+        local row = Instance.new("Frame", axePanel)
+        row.Size = UDim2.new(1, -6, 0, 32)
+        row.BackgroundColor3 = Color3.fromRGB(34, 34, 44)
+        row.BorderSizePixel = 0
+        Instance.new("UICorner", row).CornerRadius = UDim.new(0, 5)
+
+        local nameLbl = Instance.new("TextLabel", row)
+        nameLbl.Size = UDim2.new(0.6, 0, 1, 0)
+        nameLbl.Position = UDim2.new(0, 4, 0, 0)
+        nameLbl.BackgroundTransparency = 1
+        nameLbl.TextColor3 = Color3.fromRGB(240, 220, 100)
+        nameLbl.Font = Enum.Font.Gotham
+        nameLbl.TextSize = 12
+        nameLbl.TextXAlignment = Enum.TextXAlignment.Left
+        nameLbl.Text = string.format("[%d] %s", i, entry.name)
+
+        local distLbl = Instance.new("TextLabel", row)
+        distLbl.Size = UDim2.new(0.2, 0, 1, 0)
+        distLbl.Position = UDim2.new(0.6, 0, 0, 0)
+        distLbl.BackgroundTransparency = 1
+        distLbl.TextColor3 = Color3.fromRGB(140, 200, 140)
+        distLbl.Font = Enum.Font.Gotham
+        distLbl.TextSize = 10
+        local myRoot = character and character:FindFirstChild("HumanoidRootPart")
+        local dist = myRoot and entry.pivot.Parent and math.floor((myRoot.Position - entry.pivot.Position).Magnitude) or "?"
+        distLbl.Text = tostring(dist) .. "st"
+
+        local tpBtn = Instance.new("TextButton", row)
+        tpBtn.Size = UDim2.new(0.2, 0, 0.8, 0)
+        tpBtn.Position = UDim2.new(0.8, 0, 0.1, 0)
+        tpBtn.Text = "TP"
+        tpBtn.BackgroundColor3 = Color3.fromRGB(60, 130, 230)
+        tpBtn.TextColor3 = Color3.new(1,1,1)
+        tpBtn.Font = Enum.Font.GothamBold
+        tpBtn.TextSize = 11
+        Instance.new("UICorner", tpBtn).CornerRadius = UDim.new(0, 4)
+
+        tpBtn.MouseButton1Click:Connect(function()
+            if tpToStrongAxe(entry) then
+                tpBtn.BackgroundColor3 = Color3.fromRGB(40, 160, 40)
+                task.delay(1.2, function()
+                    tpBtn.BackgroundColor3 = Color3.fromRGB(60, 130, 230)
+                end)
+            else
+                tpBtn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
+                task.delay(1.2, function()
+                    tpBtn.BackgroundColor3 = Color3.fromRGB(60, 130, 230)
+                end)
+            end
+        end)
+    end
+end
+
+-- Tombol Scan
+local scanAxeBtn = makeButton(secAI, "🔍 Scan Strong Axes", Color3.fromRGB(60, 130, 200))
+scanAxeBtn.MouseButton1Click:Connect(function()
+    axeStatusLabel.Text = "⏳ Scanning..."
+    strongAxeState.list = scanStrongAxes()
+    fillAxePanel()
+    axeStatusLabel.Text = string.format("✅ %d Strong Axe ditemukan", #strongAxeState.list)
+end)
+
+-- Tombol TP All (berurutan)
+local tpAllAxeBtn = makeButton(secAI, "▶ TP Semua (Loop)", Color3.fromRGB(180, 80, 220))
+local stopAxeBtn = makeButton(secAI, "⏹ STOP", Color3.fromRGB(180, 40, 40))
+stopAxeBtn.Visible = false
+
+tpAllAxeBtn.MouseButton1Click:Connect(function()
+    if strongAxeState.running then
+        strongAxeState.running = false
+        tpAllAxeBtn.Text = "▶ TP Semua (Loop)"
+        stopAxeBtn.Visible = false
+        axeStatusLabel.Text = "Berhenti"
         return
     end
 
-    testAllState.running = true
-    testAllState.success = 0
-    testAllState.failed = 0
-    testAllToggleBtn.Text = "⏸ Running..."
-    testAllStopBtn.Visible = true
+    if #strongAxeState.list == 0 then
+        axeStatusLabel.Text = "❌ Scan dulu sebelum TP All!"
+        return
+    end
+
+    strongAxeState.running = true
+    tpAllAxeBtn.Text = "⏸ TP All Running..."
+    stopAxeBtn.Visible = true
 
     task.spawn(function()
-        local count = testAllState.count
-        local allRemotes = {}
-        for _, r in pairs(snifferState.remotes) do
-            table.insert(allRemotes, r)
-        end
-
-        for i, r in ipairs(allRemotes) do
-            if not testAllState.running then break end
-            testAllState.current = r.path
-            testAllStatusLabel.Text = string.format("⏳ %s (%d/%d)", r.path:match("[^.]+$"), i, #allRemotes)
-
-            local isFunction = r.object:IsA("RemoteFunction")
-            local method = isFunction and "InvokeServer" or "FireServer"
-
-            local ok, err
-            for _ = 1, count do
-                if not testAllState.running then break end
-                ok, err = pcall(function()
-                    r.object[method](r.object) -- tanpa argumen
-                end)
-                if ok then
-                    testAllState.success = testAllState.success + 1
-                else
-                    testAllState.failed = testAllState.failed + 1
+        while strongAxeState.running do
+            for i, entry in ipairs(strongAxeState.list) do
+                if not strongAxeState.running then break end
+                if not entry.pivot or not entry.pivot.Parent then
+                    axeStatusLabel.Text = string.format("⚠️ %s sudah hilang", entry.name)
+                    continue
                 end
+                local success = tpToStrongAxe(entry)
+                if success then
+                    axeStatusLabel.Text = string.format("✈️ TP %s (%d/%d)", entry.name, i, #strongAxeState.list)
+                else
+                    axeStatusLabel.Text = "❌ Gagal TP " .. entry.name
+                end
+                task.wait(strongAxeState.delay)
             end
-
-            task.wait(0.05) -- jeda kecil antar remote
+            axeStatusLabel.Text = "✅ Selesai satu putaran. Mulai lagi..."
         end
-
-        testAllToggleBtn.Text = "▶ Tes Semua Remote"
-        testAllStopBtn.Visible = false
-        testAllStatusLabel.Text = string.format(
-            "✅ Selesai. Sukses: %d, Gagal: %d",
-            testAllState.success,
-            testAllState.failed
-        )
-        testAllState.running = false
+        tpAllAxeBtn.Text = "▶ TP Semua (Loop)"
+        stopAxeBtn.Visible = false
+        axeStatusLabel.Text = "Berhenti"
     end)
 end)
 
-testAllStopBtn.MouseButton1Click:Connect(function()
-    testAllState.running = false
-    testAllToggleBtn.Text = "▶ Tes Semua Remote"
-    testAllStopBtn.Visible = false
-    testAllStatusLabel.Text = "Dihentikan"
+stopAxeBtn.MouseButton1Click:Connect(function()
+    strongAxeState.running = false
+    tpAllAxeBtn.Text = "▶ TP Semua (Loop)"
+    stopAxeBtn.Visible = false
+    axeStatusLabel.Text = "Berhenti"
 end)
 
-makeLabel(secAI, "⚠️ Hati‑hati: bisa memicu event tak terduga dalam game!")
+makeLabel(secAI, "💡 Tips: Gunakan fitur ini untuk mengambil semua Strong Axe dengan cepat.")
 
 -- =============== REMOTE SNIFFER & CODE COPIER (SAFE VERSION) ===============
 makeLabel(secAI, "━━━━━━ 🕵️ REMOTE SNIFFER (SAFE) ━━━━━━")
