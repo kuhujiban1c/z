@@ -1541,78 +1541,101 @@ end)
 
 makeLabel(secAI, "💡 Tips: Gunakan fitur ini untuk berpindah antar Lost Child dengan cepat.")
 
--- =============== STRONGHOLD EXPLOIT (AI TOOLS) ===============
-makeLabel(secAI, "━━━━━━ 🏰 STRONGHOLD EXPLOIT ━━━━━━")
+-- =============== TEST ALL REMOTES (AI TOOLS) ===============
+makeLabel(secAI, "━━━━━━ 🧪 TEST ALL REMOTES ━━━━━━")
 
-local strongholdState = {
-    spamCount = 5
+local testAllState = {
+    running = false,
+    count = 1,      -- berapa kali panggil per remote
+    success = 0,
+    failed = 0,
+    current = "",
 }
 
-makeSlider(secAI, "Jumlah Spam", 1, 20, strongholdState.spamCount, function(v)
-    strongholdState.spamCount = v
+-- Slider jumlah panggilan
+makeSlider(secAI, "Panggil per remote", 1, 5, testAllState.count, function(v)
+    testAllState.count = v
 end)
 
-local strongholdStatusLabel = makeLabel(secAI, "Status: Idle")
-strongholdStatusLabel.TextColor3 = Color3.fromRGB(255, 200, 100)
+local testAllStatusLabel = makeLabel(secAI, "Status: Idle")
+testAllStatusLabel.TextColor3 = Color3.fromRGB(255, 200, 100)
 
--- Fungsi mencari remote dari Sniffer dulu, lalu global
-local function findRemote(name)
-    -- Cek di Sniffer
-    if snifferState and snifferState.remotes then
-        for _, data in pairs(snifferState.remotes) do
-            if data.object and data.object.Name == name then
-                return data.object
-            end
-        end
-    end
-    -- Fallback global
-    for _, obj in ipairs(game:GetDescendants()) do
-        if (obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction")) and obj.Name == name then
-            return obj
-        end
-    end
-    return nil
-end
+-- Tombol Start/Stop
+local testAllToggleBtn = makeStyledButton(secAI, "▶ Tes Semua Remote", Color3.fromRGB(200, 120, 50))
+local testAllStopBtn = makeButton(secAI, "⏹ STOP", Color3.fromRGB(200, 80, 80))
+testAllStopBtn.Visible = false
 
--- Fungsi spam
-local function spamStrongholdRemote(remoteName)
-    local remote = findRemote(remoteName)
-    if not remote then
-        strongholdStatusLabel.Text = "❌ Remote " .. remoteName .. " tidak ditemukan"
+testAllToggleBtn.MouseButton1Click:Connect(function()
+    if testAllState.running then
+        testAllState.running = false
+        testAllToggleBtn.Text = "▶ Tes Semua Remote"
+        testAllStopBtn.Visible = false
+        testAllStatusLabel.Text = "Berhenti"
         return
     end
 
-    local method = remote:IsA("RemoteFunction") and "InvokeServer" or "FireServer"
-    local success = 0
-    local fails = 0
-
-    for _ = 1, strongholdState.spamCount do
-        task.spawn(function()
-            local ok, err = pcall(function()
-                remote[method](remote)
-            end)
-            if ok then success = success + 1 else fails = fails + 1 end
-        end)
+    -- Cek apakah Remote Sniffer sudah punya data
+    if not snifferState or not next(snifferState.remotes) then
+        testAllStatusLabel.Text = "❌ Scan Remotes dulu!"
+        return
     end
-    task.wait(0.2)
-    strongholdStatusLabel.Text = string.format("✅ %s: %d ok, %d gagal", remoteName, success, fails)
-end
 
--- Tombol untuk StrongholdComplete
-local completeBtn = makeStyledButton(secAI, "✅ Spam StrongholdComplete", Color3.fromRGB(200, 150, 50))
-completeBtn.MouseButton1Click:Connect(function()
-    strongholdStatusLabel.Text = "⏳ Spamming StrongholdComplete..."
-    spamStrongholdRemote("StrongholdComplete")
+    testAllState.running = true
+    testAllState.success = 0
+    testAllState.failed = 0
+    testAllToggleBtn.Text = "⏸ Running..."
+    testAllStopBtn.Visible = true
+
+    task.spawn(function()
+        local count = testAllState.count
+        local allRemotes = {}
+        for _, r in pairs(snifferState.remotes) do
+            table.insert(allRemotes, r)
+        end
+
+        for i, r in ipairs(allRemotes) do
+            if not testAllState.running then break end
+            testAllState.current = r.path
+            testAllStatusLabel.Text = string.format("⏳ %s (%d/%d)", r.path:match("[^.]+$"), i, #allRemotes)
+
+            local isFunction = r.object:IsA("RemoteFunction")
+            local method = isFunction and "InvokeServer" or "FireServer"
+
+            local ok, err
+            for _ = 1, count do
+                if not testAllState.running then break end
+                ok, err = pcall(function()
+                    r.object[method](r.object) -- tanpa argumen
+                end)
+                if ok then
+                    testAllState.success = testAllState.success + 1
+                else
+                    testAllState.failed = testAllState.failed + 1
+                end
+            end
+
+            task.wait(0.05) -- jeda kecil antar remote
+        end
+
+        testAllToggleBtn.Text = "▶ Tes Semua Remote"
+        testAllStopBtn.Visible = false
+        testAllStatusLabel.Text = string.format(
+            "✅ Selesai. Sukses: %d, Gagal: %d",
+            testAllState.success,
+            testAllState.failed
+        )
+        testAllState.running = false
+    end)
 end)
 
--- Tombol untuk StrongholdOpenGate
-local openGateBtn = makeStyledButton(secAI, "🔓 Spam StrongholdOpenGate", Color3.fromRGB(150, 100, 200))
-openGateBtn.MouseButton1Click:Connect(function()
-    strongholdStatusLabel.Text = "⏳ Spamming StrongholdOpenGate..."
-    spamStrongholdRemote("StrongholdOpenGate")
+testAllStopBtn.MouseButton1Click:Connect(function()
+    testAllState.running = false
+    testAllToggleBtn.Text = "▶ Tes Semua Remote"
+    testAllStopBtn.Visible = false
+    testAllStatusLabel.Text = "Dihentikan"
 end)
 
-makeLabel(secAI, "💡 Pastikan sudah Scan Remotes agar remote terdeteksi.")
+makeLabel(secAI, "⚠️ Hati‑hati: bisa memicu event tak terduga dalam game!")
 
 -- =============== REMOTE SNIFFER & CODE COPIER (SAFE VERSION) ===============
 makeLabel(secAI, "━━━━━━ 🕵️ REMOTE SNIFFER (SAFE) ━━━━━━")
