@@ -1588,15 +1588,19 @@ copyAllBtn.MouseButton1Click:Connect(function()
     end)
 end)
 
--- =============== INVENTORY EXPLOIT (DYNAMIC) ===============
-makeLabel(secAI, "━━━━━━ 💣 EXPLOIT INVENTORY (Dynamic) ━━━━━━")
+-- =============== INVENTORY EXPLOIT (DEBUG VERSION) ===============
+makeLabel(secAI, "━━━━━━ 💣 EXPLOIT INVENTORY (v3 Debug) ━━━━━━")
 
 local exploitState = {
     itemName = "TestItem",
     spamCount = 10,
 }
 
-makeLabel(secAI, "Nama Item (untuk exploit yg butuh):")
+-- Status label sendiri untuk exploit
+local exploitStatusLabel = makeLabel(secAI, "Status: Idle")
+exploitStatusLabel.TextColor3 = Color3.fromRGB(255, 200, 100)
+
+makeLabel(secAI, "Nama Item:")
 local exploitItemNameBox = Instance.new("TextBox", secAI)
 exploitItemNameBox.Size = UDim2.new(1, 0, 0, 28)
 exploitItemNameBox.BackgroundColor3 = Color3.fromRGB(34, 34, 44)
@@ -1614,15 +1618,8 @@ makeSlider(secAI, "Jumlah Spam", 1, 50, exploitState.spamCount, function(v)
     exploitState.spamCount = v
 end)
 
--- Fungsi mencari remote berdasarkan nama dari Sniffer
-local function getRemoteFromSniffer(name)
-    -- Cari di snifferState.remotes yang sudah di-scan
-    for path, data in pairs(snifferState.remotes) do
-        if data.object and data.object.Name == name then
-            return data.object
-        end
-    end
-    -- Fallback: cari manual
+-- Fungsi mencari remote global (fallback kalau sniffer kosong)
+local function findRemoteGlobal(name)
     for _, obj in ipairs(game:GetDescendants()) do
         if (obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction")) and obj.Name == name then
             return obj
@@ -1631,23 +1628,47 @@ local function getRemoteFromSniffer(name)
     return nil
 end
 
-local function spamRemote(remote, args)
-    if not remote then
-        snifferStatusLabel.Text = "❌ Remote tidak ditemukan!"
-        return
+-- Fungsi mendapatkan remote: pertama dari sniffer, lalu global
+local function getRemote(name)
+    -- Cek di sniffer dulu
+    if snifferState and snifferState.remotes then
+        for path, data in pairs(snifferState.remotes) do
+            if data.object and data.object.Name == name then
+                return data.object, path
+            end
+        end
     end
-    args = args or {}
-    for _ = 1, exploitState.spamCount do
-        task.spawn(function()
-            pcall(function()
-                remote:FireServer(unpack(args))
-            end)
-        end)
+    -- Fallback global
+    local remote = findRemoteGlobal(name)
+    if remote then
+        return remote, remote:GetFullName()
     end
-    snifferStatusLabel.Text = "✅ Spam " .. remote.Name .. " (" .. exploitState.spamCount .. "x)"
+    return nil, nil
 end
 
--- Daftar nama remote yang ingin diexploit (tanpa path)
+-- Fungsi spam yang aman
+local function spamRemote(remote, remoteName, args)
+    if not remote then
+        exploitStatusLabel.Text = "❌ Remote " .. remoteName .. " tidak ditemukan"
+        return
+    end
+    local isFunction = remote:IsA("RemoteFunction")
+    local method = isFunction and "InvokeServer" or "FireServer"
+    local success = 0
+    local fails = 0
+    for _ = 1, exploitState.spamCount do
+        task.spawn(function()
+            local ok, err = pcall(function()
+                remote[method](remote, unpack(args or {}))
+            end)
+            if ok then success = success + 1 else fails = fails + 1 end
+        end)
+    end
+    task.wait(0.2)
+    exploitStatusLabel.Text = string.format("✅ %s: %d ok, %d gagal", remoteName, success, fails)
+end
+
+-- Daftar nama remote target
 local exploitRemoteNames = {
     "RequestBagDropItem",
     "RequestGiveItemToNPC",
@@ -1660,37 +1681,37 @@ local exploitRemoteNames = {
 
 -- Buat tombol untuk setiap remote
 for _, name in ipairs(exploitRemoteNames) do
-    local btn = makeButton(secAI, "💣 " .. name, Color3.fromRGB(200, 100, 50))
+    local remote, path = getRemote(name)
+    local btnColor = remote and Color3.fromRGB(200, 100, 50) or Color3.fromRGB(80, 80, 80)
+    local btn = makeButton(secAI, "💣 " .. name, btnColor)
     btn.MouseButton1Click:Connect(function()
-        local remote = getRemoteFromSniffer(name)
-        if not remote then
-            snifferStatusLabel.Text = "❌ Remote " .. name .. " tidak ditemukan"
+        -- Refresh remote setiap klik (bisa saja baru ada)
+        local r, p = getRemote(name)
+        if not r then
+            exploitStatusLabel.Text = "❌ " .. name .. " tidak ditemukan. Coba Scan Remotes dulu."
             return
         end
-        -- Tentukan args tergantung remote
-        local args = {}
-        if name == "RequestCollectCandy" or name == "RequestCollectCoints" then
-            args = {} -- tanpa parameter
-        else
-            args = {exploitState.itemName}
-        end
-        spamRemote(remote, args)
+        local args = (name == "RequestCollectCandy" or name == "RequestCollectCoints") and {} or {exploitState.itemName}
+        spamRemote(r, name, args)
     end)
 end
 
--- Tombol Spam All
+-- Tombol SPAM ALL
 local spamAllBtn = makeStyledButton(secAI, "💥 SPAM ALL", Color3.fromRGB(255, 50, 50))
 spamAllBtn.MouseButton1Click:Connect(function()
+    local totalOk, totalFail = 0, 0
     for _, name in ipairs(exploitRemoteNames) do
-        local remote = getRemoteFromSniffer(name)
-        if remote then
+        local r, _ = getRemote(name)
+        if r then
             local args = (name == "RequestCollectCandy" or name == "RequestCollectCoints") and {} or {exploitState.itemName}
-            spamRemote(remote, args)
+            spamRemote(r, name, args)
+        else
+            exploitStatusLabel.Text = "❌ " .. name .. " tidak ditemukan, skip"
         end
     end
 end)
 
-makeLabel(secAI, "⛔ Pastikan sudah Scan Remotes & Inject Spy terlebih dahulu!")
+makeLabel(secAI, "⛔ Pastikan klik 'Scan Remotes' dulu jika tombol abu-abu.")
 
 -- =============== DEVELOPER ===============
 local execContainer = Instance.new("Frame", secDeveloper)
