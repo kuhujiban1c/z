@@ -2124,54 +2124,102 @@ clearAnalyzerBtn.MouseButton1Click:Connect(function()
     analyzerStatusLabel.Text = "Status: Siap"
 end)
 
--- =============== UNLOCK ALL MAP (SMART SPIRAL) ===============
+-- =============== SHARED UTILITY ===============
+local function roundPos(pos, snap)
+    snap = snap or 10
+    return string.format("%d_%d", math.floor(pos.X/snap)*snap, math.floor(pos.Z/snap)*snap)
+end
+
+local function makeProgressBar(parent, width)
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(1, 0, 0, 10)
+    frame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    frame.BorderSizePixel = 0
+    frame.Parent = parent
+
+    local fill = Instance.new("Frame")
+    fill.Size = UDim2.new(0, 0, 1, 0)
+    fill.BackgroundColor3 = Color3.fromRGB(80, 200, 120)
+    fill.BorderSizePixel = 0
+    fill.Parent = frame
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(1, 0)
+    corner.Parent = frame
+
+    local corner2 = Instance.new("UICorner")
+    corner2.CornerRadius = UDim.new(1, 0)
+    corner2.Parent = fill
+
+    return {
+        frame = frame,
+        fill = fill,
+        set = function(pct) -- 0.0 to 1.0
+            fill.Size = UDim2.new(math.clamp(pct, 0, 1), 0, 1, 0)
+        end
+    }
+end
+
+local function generateRingPoints(startPos, ring, step, noise, visited)
+    local points = {}
+    local r = ring * step
+
+    -- Iterasi lebih efisien: hanya tepi ring
+    local function tryAdd(x, z)
+        local target = startPos + Vector3.new(x, 0, z)
+        if noise then
+            target = target + Vector3.new(math.random(-5, 5), 0, math.random(-5, 5))
+        end
+        local key = roundPos(target)
+        if not visited[key] then
+            visited[key] = true
+            table.insert(points, target)
+        end
+    end
+
+    -- Sisi atas & bawah
+    for x = -r, r, step do
+        tryAdd(x,  r)
+        tryAdd(x, -r)
+    end
+    -- Sisi kiri & kanan (hindari duplikat sudut)
+    for z = -r + step, r - step, step do
+        tryAdd( r, z)
+        tryAdd(-r, z)
+    end
+
+    return points
+end
+
+-- =============== UNLOCK MAP (SMART SPREAD) ===============
 makeLabel(secAI, "━━━━━━ 🗺️ UNLOCK MAP (SMART SPREAD) ━━━━━━")
 
 local mapState = {
-    running = false,
-    visited = {},       -- set of Vector3 rounded
-    stepSize = 60,      -- jarak antar titik
-    waitTime = 0.3,     -- jeda antar teleport
-    maxRadius = 500,    -- batas jarak dari titik awal
+    running  = false,
+    visited  = {},
+    stepSize = 60,
+    waitTime = 0.3,
+    maxRadius = 500,
 }
 
--- UI status
-local mapStatusLabel = makeLabel(secAI, "Status: Idle")
+local mapStatusLabel   = makeLabel(secAI, "Status: Idle")
 mapStatusLabel.TextColor3 = Color3.fromRGB(160, 200, 255)
 
-makeSlider(secAI, "Langkah (stud)", 30, 200, mapState.stepSize, function(v)
-    mapState.stepSize = v
-end)
-
-makeSlider(secAI, "Jeda (detik)", 0.1, 2, mapState.waitTime, function(v)
-    mapState.waitTime = v
-end)
-
-makeSlider(secAI, "Radius Maks", 100, 2000, mapState.maxRadius, function(v)
-    mapState.maxRadius = v
-end)
+makeSlider(secAI, "Langkah (stud)", 30, 200, mapState.stepSize, function(v) mapState.stepSize = v end)
+makeSlider(secAI, "Jeda (detik)",   0.1, 2,  mapState.waitTime, function(v) mapState.waitTime = v end)
+makeSlider(secAI, "Radius Maks",    100, 2000, mapState.maxRadius, function(v) mapState.maxRadius = v end)
 
 local mapProgressLabel = makeLabel(secAI, "Progress: 0 titik dikunjungi")
 mapProgressLabel.TextColor3 = Color3.fromRGB(140, 220, 140)
 
--- Tombol Start/Stop
+local mapBar = makeProgressBar(secAI)
+
 local mapStartBtn = makeStyledButton(secAI, "▶ START UNLOCK MAP", Color3.fromRGB(80, 180, 200))
-local mapStopBtn = makeButton(secAI, "⏹ STOP", Color3.fromRGB(200, 80, 80))
+local mapStopBtn  = makeButton(secAI, "⏹ STOP", Color3.fromRGB(200, 80, 80))
 mapStopBtn.Visible = false
 
-local function roundPos(pos)
-    -- Pembulatan posisi agar gampang dicek sebagai visited
-    return Vector3.new(math.floor(pos.X/10)*10, 0, math.floor(pos.Z/10)*10)
-end
-
 mapStartBtn.MouseButton1Click:Connect(function()
-    if mapState.running then
-        mapState.running = false
-        mapStartBtn.Text = "▶ START UNLOCK MAP"
-        mapStopBtn.Visible = false
-        mapStatusLabel.Text = "Dihentikan"
-        return
-    end
+    if mapState.running then return end
 
     local root = character and character:FindFirstChild("HumanoidRootPart")
     if not root then
@@ -2179,140 +2227,115 @@ mapStartBtn.MouseButton1Click:Connect(function()
         return
     end
 
-    -- Reset state
     mapState.running = true
     mapState.visited = {}
     local startPos = root.Position
-    table.insert(mapState.visited, roundPos(startPos))
+    mapState.visited[roundPos(startPos)] = true
 
     mapStartBtn.Text = "⏸ RUNNING..."
     mapStopBtn.Visible = true
     mapStatusLabel.Text = "⚡ Menyebar..."
+    mapBar.set(0)
 
     task.spawn(function()
-        local step = mapState.stepSize
-        local waitTime = mapState.waitTime
-        local maxR = mapState.maxRadius
-        local ring = 1
-        local totalVisited = 1
+        local step      = mapState.stepSize
+        local waitTime  = mapState.waitTime
+        local maxR      = mapState.maxRadius
+        local maxRings  = math.floor(maxR / step)
+        local ring      = 1
+        local total     = 1
+        local startTime = os.clock()
 
-        while mapState.running and ring * step <= maxR do
-            -- Untuk setiap ring (jarak dari pusat), generate titik di sekeliling
-            local points = {}
-            for x = -ring*step, ring*step, step do
-                for z = -ring*step, ring*step, step do
-                    -- Hanya ambil titik di tepi ring (bukan di dalam ring yang lebih kecil)
-                    if math.abs(x) == ring*step or math.abs(z) == ring*step then
-                        local target = startPos + Vector3.new(x, 0, z)
-                        local rKey = roundPos(target)
-                        if not mapState.visited[rKey] then
-                            table.insert(points, target)
-                            mapState.visited[rKey] = true
-                        end
-                    end
-                end
-            end
+        while mapState.running and ring <= maxRings do
+            local points = generateRingPoints(startPos, ring, step, false, mapState.visited)
 
-            -- Kunjungi tiap titik di ring ini
-            for _, target in ipairs(points) do
+            for i, target in ipairs(points) do
                 if not mapState.running then break end
+
                 root.CFrame = CFrame.new(target + Vector3.new(0, 3.5, 0))
-                totalVisited = totalVisited + 1
-                mapProgressLabel.Text = "Progress: " .. totalVisited .. " titik dikunjungi"
-                mapStatusLabel.Text = string.format("📍 Ring %d, %d/%d", ring, totalVisited, #points)
+                total = total + 1
+
+                -- ETA
+                local elapsed  = os.clock() - startTime
+                local pct      = ring / maxRings
+                local eta      = pct > 0.01 and string.format("ETA: %.0fs", elapsed / pct * (1 - pct)) or "menghitung..."
+
+                mapProgressLabel.Text = string.format("Ring %d/%d | %d titik | %s", ring, maxRings, total, eta)
+                mapBar.set(pct)
+                mapStatusLabel.Text = string.format("📍 (%d/%d di ring ini)", i, #points)
+
                 task.wait(waitTime)
             end
 
             ring = ring + 1
         end
 
+        mapState.running = false
         mapStartBtn.Text = "▶ START UNLOCK MAP"
         mapStopBtn.Visible = false
-        mapStatusLabel.Text = "✅ Selesai. Total " .. totalVisited .. " titik"
-        mapState.running = false
+        mapBar.set(1)
+        mapStatusLabel.Text = string.format("✅ Selesai! %d titik dalam %.1fs", total, os.clock() - startTime)
     end)
 end)
 
 mapStopBtn.MouseButton1Click:Connect(function()
-    mapState.running = false
-    mapStartBtn.Text = "▶ START UNLOCK MAP"
+    mapState.running  = false
+    mapStartBtn.Text  = "▶ START UNLOCK MAP"
     mapStopBtn.Visible = false
-    mapStatusLabel.Text = "Dihentikan"
+    mapStatusLabel.Text = "⛔ Dihentikan"
 end)
 
-makeLabel(secAI, "💡 Tips: Mulai dari titik awal, lalu menyebar ke luar.\n   Semakin kecil Langkah, semakin rapat (tapi lebih lama).")
+makeLabel(secAI, "💡 Tips: Langkah kecil = lebih rapat tapi lebih lama.")
 
--- =============== UNLOCK ALL MAP (TURBO BYPASS) ===============
+
+-- =============== UNLOCK MAP (TURBO + BYPASS) ===============
 makeLabel(secAI, "━━━━━━ 🗺️ UNLOCK MAP (TURBO + BYPASS) ━━━━━━")
 
-local mapTurboState = {
-    running = false,
-    visited = {},
-    stepSize = 100,       -- langkah lebih besar (100-300)
-    waitTime = 0.05,      -- hampir tanpa jeda
-    maxRadius = 2000,     -- hingga 10.000
-    noise = true,         -- tambah variasi posisi
-    antiAFK = true,       -- anti-AFK internal
-    walkSim = true,       -- simulasi langkah kecil setelah TP
+local turboState = {
+    running   = false,
+    visited   = {},
+    stepSize  = 100,
+    waitTime  = 0.05,
+    maxRadius = 2000,
+    noise     = true,
+    antiAFK   = true,
+    walkSim   = true,
 }
 
--- UI status
 local turboStatusLabel = makeLabel(secAI, "Status: Idle")
 turboStatusLabel.TextColor3 = Color3.fromRGB(255, 220, 100)
 
-makeSlider(secAI, "Langkah (stud)", 50, 500, mapTurboState.stepSize, function(v)
-    mapTurboState.stepSize = v
-end)
+makeSlider(secAI, "[T] Langkah (stud)", 50, 500,   turboState.stepSize,  function(v) turboState.stepSize  = v end)
+makeSlider(secAI, "[T] Jeda (detik)",   0,  0.5,   turboState.waitTime,  function(v) turboState.waitTime  = v end)
+makeSlider(secAI, "[T] Radius Maks",    500, 10000, turboState.maxRadius, function(v) turboState.maxRadius = v end)
 
-makeSlider(secAI, "Jeda (detik)", 0, 0.5, mapTurboState.waitTime, function(v)
-    mapTurboState.waitTime = v
-end)
-
-makeSlider(secAI, "Radius Maks", 500, 10000, mapTurboState.maxRadius, function(v)
-    mapTurboState.maxRadius = v
-end)
-
--- Toggle Noise
-local noiseToggle = makeButton(secAI, "Noise: ON", Color3.fromRGB(120, 160, 120))
-noiseToggle.MouseButton1Click:Connect(function()
-    mapTurboState.noise = not mapTurboState.noise
-    noiseToggle.Text = mapTurboState.noise and "Noise: ON" or "Noise: OFF"
-end)
-
--- Toggle Anti-AFK
-local afkToggle = makeButton(secAI, "Anti-AFK: ON", Color3.fromRGB(120, 160, 120))
-afkToggle.MouseButton1Click:Connect(function()
-    mapTurboState.antiAFK = not mapTurboState.antiAFK
-    afkToggle.Text = mapTurboState.antiAFK and "Anti-AFK: ON" or "Anti-AFK: OFF"
-end)
-
--- Toggle Walk Sim
-local walkSimToggle = makeButton(secAI, "Simulasi Jalan: ON", Color3.fromRGB(120, 160, 120))
-walkSimToggle.MouseButton1Click:Connect(function()
-    mapTurboState.walkSim = not mapTurboState.walkSim
-    walkSimToggle.Text = mapTurboState.walkSim and "Simulasi Jalan: ON" or "Simulasi Jalan: OFF"
-end)
-
-local turboProgressLabel = makeLabel(secAI, "Progress: 0 titik dikunjungi")
-turboProgressLabel.TextColor3 = Color3.fromRGB(140, 220, 140)
-
--- Tombol Start/Stop
-local turboStartBtn = makeStyledButton(secAI, "▶ START TURBO UNLOCK", Color3.fromRGB(255, 140, 30))
-local turboStopBtn = makeButton(secAI, "⏹ STOP", Color3.fromRGB(200, 80, 80))
-turboStopBtn.Visible = false
-
-local function roundPos(pos)
-    return Vector3.new(math.floor(pos.X/10)*10, 0, math.floor(pos.Z/10)*10)
+-- Toggle helpers
+local function makeToggle(parent, label, state, key)
+    local btn = makeButton(parent, label .. ": ON", Color3.fromRGB(60, 160, 100))
+    btn.MouseButton1Click:Connect(function()
+        state[key] = not state[key]
+        btn.Text = label .. (state[key] and ": ON" or ": OFF")
+        btn.BackgroundColor3 = state[key] and Color3.fromRGB(60,160,100) or Color3.fromRGB(140,60,60)
+    end)
+    return btn
 end
 
+makeToggle(secAI, "Noise",          turboState, "noise")
+makeToggle(secAI, "Anti-AFK",       turboState, "antiAFK")
+makeToggle(secAI, "Simulasi Jalan", turboState, "walkSim")
+
+local turboProgressLabel = makeLabel(secAI, "Progress: 0 titik")
+turboProgressLabel.TextColor3 = Color3.fromRGB(140, 220, 140)
+
+local turboBar = makeProgressBar(secAI)
+turboBar.fill.BackgroundColor3 = Color3.fromRGB(255, 160, 40)
+
+local turboStartBtn = makeStyledButton(secAI, "▶ START TURBO UNLOCK", Color3.fromRGB(255, 140, 30))
+local turboStopBtn  = makeButton(secAI, "⏹ STOP", Color3.fromRGB(200, 80, 80))
+turboStopBtn.Visible = false
+
 turboStartBtn.MouseButton1Click:Connect(function()
-    if mapTurboState.running then
-        mapTurboState.running = false
-        turboStartBtn.Text = "▶ START TURBO UNLOCK"
-        turboStopBtn.Visible = false
-        turboStatusLabel.Text = "Dihentikan"
-        return
-    end
+    if turboState.running then return end
 
     local root = character and character:FindFirstChild("HumanoidRootPart")
     if not root then
@@ -2320,28 +2343,31 @@ turboStartBtn.MouseButton1Click:Connect(function()
         return
     end
 
-    mapTurboState.running = true
-    mapTurboState.visited = {}
+    turboState.running = true
+    turboState.visited = {}
     local startPos = root.Position
-    table.insert(mapTurboState.visited, roundPos(startPos))
+    turboState.visited[roundPos(startPos)] = true
 
     turboStartBtn.Text = "⏸ TURBO RUNNING..."
     turboStopBtn.Visible = true
     turboStatusLabel.Text = "⚡ Turbo menyebar..."
+    turboBar.set(0)
 
     task.spawn(function()
-        local step = mapTurboState.stepSize
-        local waitTime = mapTurboState.waitTime
-        local maxR = mapTurboState.maxRadius
-        local ring = 1
-        local totalVisited = 1
+        local step      = turboState.stepSize
+        local waitTime  = turboState.waitTime
+        local maxR      = turboState.maxRadius
+        local maxRings  = math.floor(maxR / step)
+        local ring      = 1
+        local total     = 1
+        local startTime = os.clock()
 
-        -- Loop anti-AFK
-        local afkThread
-        if mapTurboState.antiAFK then
-            afkThread = task.spawn(function()
-                while mapTurboState.running do
-                    task.wait(5)
+        -- Anti-AFK loop (disimpan agar bisa di-cancel)
+        local afkConn
+        if turboState.antiAFK then
+            afkConn = task.spawn(function()
+                while turboState.running do
+                    task.wait(4 + math.random())
                     pcall(function()
                         if humanoid then
                             humanoid:ChangeState(Enum.HumanoidStateType.Running)
@@ -2351,267 +2377,62 @@ turboStartBtn.MouseButton1Click:Connect(function()
             end)
         end
 
-        while mapTurboState.running and ring * step <= maxR do
-            local points = {}
-            for x = -ring*step, ring*step, step do
-                for z = -ring*step, ring*step, step do
-                    if math.abs(x) == ring*step or math.abs(z) == ring*step then
-                        local target = startPos + Vector3.new(x, 0, z)
-                        -- Tambah noise (offset acak kecil)
-                        if mapTurboState.noise then
-                            target = target + Vector3.new(math.random(-5,5), 0, math.random(-5,5))
-                        end
-                        local rKey = roundPos(target)
-                        if not mapTurboState.visited[rKey] then
-                            table.insert(points, target)
-                            mapTurboState.visited[rKey] = true
-                        end
-                    end
-                end
-            end
+        while turboState.running and ring <= maxRings do
+            local points = generateRingPoints(startPos, ring, step, turboState.noise, turboState.visited)
 
-            for _, target in ipairs(points) do
-                if not mapTurboState.running then break end
+            for i, target in ipairs(points) do
+                if not turboState.running then break end
 
-                -- Teleport instantly
                 root.CFrame = CFrame.new(target + Vector3.new(0, 3.5, 0))
-                totalVisited = totalVisited + 1
-                turboProgressLabel.Text = "Progress: " .. totalVisited .. " titik"
-                turboStatusLabel.Text = string.format("📍 Ring %d, %d titik", ring, totalVisited)
+                total = total + 1
 
-                -- Simulasi jalan kecil
-                if mapTurboState.walkSim and humanoid then
-                    local dir = (target - startPos).Unit
-                    humanoid:MoveTo(root.Position + dir * 2)
-                    task.wait(0.05)
-                    humanoid:Move(Vector3.new(0,0,0), true)
+                -- Simulasi jalan kecil (bypass anti-cheat)
+                if turboState.walkSim and humanoid then
+                    local dir = (target - root.Position)
+                    if dir.Magnitude > 0 then
+                        humanoid:MoveTo(root.Position + dir.Unit * 2)
+                    end
+                    task.wait(0.04)
+                    humanoid:Move(Vector3.new(0, 0, 0), true)
                 end
 
-                -- Jeda minimal
+                local pct = ring / maxRings
+                local elapsed = os.clock() - startTime
+                local eta = pct > 0.01 and string.format("ETA: %.0fs", elapsed / pct * (1 - pct)) or "menghitung..."
+
+                turboProgressLabel.Text = string.format("Ring %d/%d | %d titik | %s", ring, maxRings, total, eta)
+                turboBar.set(pct)
+                turboStatusLabel.Text = string.format("📍 (%d/%d di ring ini)", i, #points)
+
                 if waitTime > 0.001 then
                     task.wait(waitTime)
                 else
-                    task.wait() -- minimal 1 frame
+                    task.wait()
                 end
             end
 
             ring = ring + 1
         end
 
-        mapTurboState.running = false
+        -- Cleanup
+        turboState.running = false
+        if afkConn then task.cancel(afkConn) end
+
         turboStartBtn.Text = "▶ START TURBO UNLOCK"
         turboStopBtn.Visible = false
-        turboStatusLabel.Text = "✅ Selesai. Total " .. totalVisited .. " titik"
+        turboBar.set(1)
+        turboStatusLabel.Text = string.format("✅ Selesai! %d titik dalam %.1fs", total, os.clock() - startTime)
     end)
 end)
 
 turboStopBtn.MouseButton1Click:Connect(function()
-    mapTurboState.running = false
-    turboStartBtn.Text = "▶ START TURBO UNLOCK"
+    turboState.running  = false
+    turboStartBtn.Text  = "▶ START TURBO UNLOCK"
     turboStopBtn.Visible = false
-    turboStatusLabel.Text = "Dihentikan"
+    turboStatusLabel.Text = "⛔ Dihentikan"
 end)
 
-makeLabel(secAI, "💡 Tips: Radius hingga 10k stud, jeda 0 detik, noise & anti-AFK untuk hindari deteksi.")
-
--- =============== KICK PLAYER (AI TOOLS) ===============
-makeLabel(secAI, "━━━━━━ 👢 KICK PLAYER ━━━━━━")
-
-local kickState = {
-    remoteName = "Kick",
-    targetPlayer = nil,
-    reason = "Exploited by DevTools",
-}
-
--- Daftar player
-local kickPlayerLabel = makeLabel(secAI, "Pilih Target:")
-local kickPlayerList = Instance.new("ScrollingFrame", secAI)
-kickPlayerList.Size = UDim2.new(1, 0, 0, 120)
-kickPlayerList.BackgroundColor3 = Color3.fromRGB(22,22,30)
-kickPlayerList.ScrollBarThickness = 4
-Instance.new("UICorner", kickPlayerList).CornerRadius = UDim.new(0,6)
-
-local kickPlayerLayout = Instance.new("UIListLayout", kickPlayerList)
-kickPlayerLayout.Padding = UDim.new(0,2)
-
-local function refreshKickPlayerList()
-    for _, c in ipairs(kickPlayerList:GetChildren()) do
-        if c:IsA("Frame") then c:Destroy() end
-    end
-    for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= player then
-            local row = Instance.new("Frame")
-            row.Size = UDim2.new(1, -4, 0, 30)
-            row.BackgroundColor3 = Color3.fromRGB(40,40,40)
-            row.BorderSizePixel = 0
-            Instance.new("UICorner", row).CornerRadius = UDim.new(0,4)
-            row.Parent = kickPlayerList
-
-            local nameBtn = Instance.new("TextButton", row)
-            nameBtn.Size = UDim2.new(0.85, 0, 1, 0)
-            nameBtn.Text = p.Name
-            nameBtn.BackgroundTransparency = 1
-            nameBtn.TextColor3 = Color3.new(1,1,1)
-            nameBtn.Font = Enum.Font.Gotham
-            nameBtn.TextSize = 14
-            nameBtn.MouseButton1Click:Connect(function()
-                kickState.targetPlayer = p
-                kickStatusLabel.Text = "Target: " .. p.Name
-            end)
-
-            local selectBtn = Instance.new("TextButton", row)
-            selectBtn.Size = UDim2.new(0.15, 0, 1, 0)
-            selectBtn.Position = UDim2.new(0.85,0,0,0)
-            selectBtn.Text = "🎯"
-            selectBtn.BackgroundColor3 = Color3.fromRGB(200,100,50)
-            selectBtn.Font = Enum.Font.GothamBold
-            selectBtn.TextSize = 12
-            Instance.new("UICorner", selectBtn).CornerRadius = UDim.new(0,4)
-            selectBtn.MouseButton1Click:Connect(function()
-                kickState.targetPlayer = p
-                kickStatusLabel.Text = "Target: " .. p.Name
-            end)
-        end
-    end
-    kickPlayerList.CanvasSize = UDim2.new(0,0,0,kickPlayerLayout.AbsoluteContentSize.Y + 4)
-end
-
-refreshKickPlayerList()
-Players.PlayerAdded:Connect(refreshKickPlayerList)
-Players.PlayerRemoving:Connect(refreshKickPlayerList)
-
--- Nama remote custom
-makeLabel(secAI, "Nama Remote Kick (default: Kick):")
-local kickRemoteBox = Instance.new("TextBox", secAI)
-kickRemoteBox.Size = UDim2.new(1, 0, 0, 28)
-kickRemoteBox.BackgroundColor3 = Color3.fromRGB(34, 34, 44)
-kickRemoteBox.TextColor3 = Color3.new(1,1,1)
-kickRemoteBox.Font = Enum.Font.Gotham
-kickRemoteBox.Text = kickState.remoteName
-kickRemoteBox.TextSize = 13
-kickRemoteBox.ClearTextOnFocus = false
-Instance.new("UICorner", kickRemoteBox).CornerRadius = UDim.new(0,4)
-kickRemoteBox.FocusLost:Connect(function()
-    kickState.remoteName = kickRemoteBox.Text
-end)
-
-local kickStatusLabel = makeLabel(secAI, "Status: Pilih target")
-kickStatusLabel.TextColor3 = Color3.fromRGB(255, 200, 100)
-
--- Fungsi mencari remote kick
-local function findKickRemote()
-    -- Cari nama persis dari textbox
-    if kickState.remoteName ~= "" then
-        for _, obj in ipairs(game:GetDescendants()) do
-            if (obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction")) and obj.Name == kickState.remoteName then
-                return obj
-            end
-        end
-        -- Cari juga di sniffer
-        if snifferState and snifferState.remotes then
-            for _, r in pairs(snifferState.remotes) do
-                if r.object and r.object.Name == kickState.remoteName then
-                    return r.object
-                end
-            end
-        end
-    end
-    -- Cari remote dengan kata "kick" atau "ban"
-    for _, obj in ipairs(game:GetDescendants()) do
-        if (obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction")) then
-            local lower = obj.Name:lower()
-            if lower:find("kick") or lower:find("ban") or lower:find("remove") then
-                return obj
-            end
-        end
-    end
-    return nil
-end
-
--- Tombol Kick via Remote
-local kickBtn = makeStyledButton(secAI, "👢 Kick via Remote", Color3.fromRGB(220, 60, 60))
-kickBtn.MouseButton1Click:Connect(function()
-    if not kickState.targetPlayer then
-        kickStatusLabel.Text = "❌ Pilih target dulu!"
-        return
-    end
-    local remote = findKickRemote()
-    if not remote then
-        kickStatusLabel.Text = "❌ Remote '" .. kickState.remoteName .. "' tidak ditemukan"
-        return
-    end
-    -- Coba berbagai format argumen
-    local argsList = {
-        {kickState.targetPlayer},
-        {kickState.targetPlayer.Name},
-        {kickState.targetPlayer.UserId},
-        {kickState.targetPlayer, kickState.reason},
-        {kickState.targetPlayer.Name, kickState.reason},
-        {"kick", kickState.targetPlayer.Name},
-        {"remove", kickState.targetPlayer},
-    }
-    for _, args in ipairs(argsList) do
-        pcall(function()
-            if remote:IsA("RemoteFunction") then
-                remote:InvokeServer(unpack(args))
-            else
-                remote:FireServer(unpack(args))
-            end
-        end)
-    end
-    kickStatusLabel.Text = "✅ Kick attempts dikirim ke " .. kickState.targetPlayer.Name
-end)
-
--- Tombol Kick via AdminEvent
-local kickAdminBtn = makeButton(secAI, "🛡 Kick via AdminEvent", Color3.fromRGB(200, 100, 200))
-kickAdminBtn.MouseButton1Click:Connect(function()
-    if not kickState.targetPlayer then
-        kickStatusLabel.Text = "❌ Pilih target dulu!"
-        return
-    end
-    local adminRemote = game:GetService("ReplicatedStorage"):FindFirstChild("ForyxeAdmin_V3")
-    if adminRemote then
-        adminRemote = adminRemote:FindFirstChild("AdminEvent")
-    end
-    if not adminRemote then
-        kickStatusLabel.Text = "❌ AdminEvent tidak ditemukan"
-        return
-    end
-    local cmds = {
-        {"kick", kickState.targetPlayer.Name},
-        {"smite", kickState.targetPlayer.Name},
-        {"punish", kickState.targetPlayer.Name},
-        {kickState.targetPlayer.Name}, -- mungkin langsung
-    }
-    for _, args in ipairs(cmds) do
-        pcall(function()
-            adminRemote:FireServer(unpack(args))
-        end)
-    end
-    kickStatusLabel.Text = "✅ Admin commands dikirim untuk " .. kickState.targetPlayer.Name
-end)
-
--- Tombol Spam Crash (Client-side)
-local crashBtn = makeButton(secAI, "💥 Spam Crash", Color3.fromRGB(150, 50, 50))
-crashBtn.MouseButton1Click:Connect(function()
-    if not kickState.targetPlayer then
-        kickStatusLabel.Text = "❌ Pilih target dulu!"
-        return
-    end
-    kickStatusLabel.Text = "💥 Mencoba crash target..."
-    task.spawn(function()
-        -- Kirim event kosong terus-menerus ke target (hanya jika ada remote yang broadcast)
-        for _, remote in ipairs(game:GetDescendants()) do
-            if remote:IsA("RemoteEvent") and remote.Name:lower():find("replicate") or remote.Name:lower():find("broadcast") then
-                for i = 1, 100 do
-                    pcall(function() remote:FireServer(kickState.targetPlayer) end)
-                end
-            end
-        end
-    end)
-end)
-
-makeLabel(secAI, "⚠️ Hanya bekerja jika server memiliki celah keamanan.")
+makeLabel(secAI, "💡 Tips: Radius hingga 10k stud, jeda 0 = 1 frame per TP.\n   Noise & Anti-AFK aktif untuk hindari deteksi.")
 
 -- =============== DEVELOPER ===============
 local execContainer = Instance.new("Frame", secDeveloper)
