@@ -4,7 +4,6 @@
 --  Credit: https://t.me/uni4codex
 --  Fixed & Refactored: all deprecated API, logic bugs, and
 --  forward-reference issues resolved.
---  UI Enhanced: glass effect, animations, hover, tooltips, etc.
 -- ============================================================
 
 -- =============== SERVICES ===============
@@ -81,6 +80,8 @@ local advanced = {
 }
 
 -- =============== FORWARD DECLARATIONS ===============
+-- Declared here so UI callbacks can reference them before the
+-- function bodies are defined further below.
 local setNoclipConnection
 local setFlyConnection
 
@@ -91,18 +92,12 @@ screen.ResetOnSpawn   = false
 screen.IgnoreGuiInset = true
 screen.Parent         = player:WaitForChild("PlayerGui")
 
--- ---- [UI ENHANCEMENT] Glass effect: blur & shadow ----
-local blur = Instance.new("BlurEffect", Lighting)
-blur.Enabled = false
-blur.Size = 0
-
 -- ---- Main Frame ----
 local frame = Instance.new("Frame")
 frame.Size            = UDim2.new(0, 450, 0.9, 0)
 frame.Position        = UDim2.new(0.5, -225, 0.05, 0)
 frame.AnchorPoint     = Vector2.new(0.5, 0)
-frame.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
-frame.BackgroundTransparency = 0.15  -- glass effect
+frame.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
 frame.BorderSizePixel = 0
 frame.Visible         = false
 frame.Active          = true
@@ -110,17 +105,6 @@ frame.Parent          = screen
 
 local frameCorner = Instance.new("UICorner", frame)
 frameCorner.CornerRadius = UDim.new(0, 8)
-
--- [UI ENHANCEMENT] Shadow image
-local shadow = Instance.new("ImageLabel", frame)
-shadow.Size = UDim2.new(1, 20, 1, 20)
-shadow.Position = UDim2.new(0, -10, 0, -10)
-shadow.BackgroundTransparency = 1
-shadow.Image = "rbxassetid://6014261993"
-shadow.ImageTransparency = 0.5
-shadow.ScaleType = Enum.ScaleType.Slice
-shadow.SliceCenter = Rect.new(49, 49, 200, 200)
-shadow.ZIndex = 0
 
 -- ---- Toggle Button ----
 local toggleBtn = Instance.new("TextButton")
@@ -136,19 +120,8 @@ toggleBtn.Parent          = screen
 local toggleCorner = Instance.new("UICorner", toggleBtn)
 toggleCorner.CornerRadius = UDim.new(0, 8)
 
--- [UI ENHANCEMENT] Animasi fade in/out untuk frame
 toggleBtn.MouseButton1Click:Connect(function()
-	if frame.Visible then
-		-- Fade out
-		local tween = TweenService:Create(frame, TweenInfo.new(0.2), {BackgroundTransparency = 1})
-		tween:Play()
-		tween.Completed:Wait()
-		frame.Visible = false
-	else
-		frame.Visible = true
-		local tween = TweenService:Create(frame, TweenInfo.new(0.3), {BackgroundTransparency = 0.15})
-		tween:Play()
-	end
+	frame.Visible = not frame.Visible
 end)
 
 -- ---- Drag Helper (generic) ----
@@ -192,7 +165,7 @@ local titleCorner = Instance.new("UICorner", titleBar)
 titleCorner.CornerRadius = UDim.new(0, 8)
 
 local titleText = Instance.new("TextLabel", titleBar)
-titleText.Size               = UDim2.new(1, -110, 0.6, 0)  -- lebih kecil karena ada tombol minimize
+titleText.Size               = UDim2.new(1, -50, 0.6, 0)
 titleText.Position           = UDim2.new(0, 12, 0, 2)
 titleText.BackgroundTransparency = 1
 titleText.Text               = "🤖 Ultimate AI Dev Tools"
@@ -202,7 +175,7 @@ titleText.Font               = Enum.Font.GothamBold
 titleText.TextSize           = 16
 
 local creditLabel = Instance.new("TextLabel", titleBar)
-creditLabel.Size             = UDim2.new(1, -110, 0.4, 0)
+creditLabel.Size             = UDim2.new(1, -50, 0.4, 0)
 creditLabel.Position         = UDim2.new(0, 12, 0.6, 0)
 creditLabel.BackgroundTransparency = 1
 creditLabel.Text             = "By: t.me/uni4codex  |  AI Enhanced"
@@ -210,30 +183,6 @@ creditLabel.TextColor3       = Color3.fromRGB(180, 180, 180)
 creditLabel.TextXAlignment   = Enum.TextXAlignment.Left
 creditLabel.Font             = Enum.Font.Gotham
 creditLabel.TextSize         = 10
-
--- [UI ENHANCEMENT] Minimize button
-local minimizeBtn = Instance.new("TextButton", titleBar)
-minimizeBtn.Size = UDim2.new(0, 32, 0, 32)
-minimizeBtn.Position = UDim2.new(1, -72, 0, 4)
-minimizeBtn.Text = "─"
-minimizeBtn.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
-minimizeBtn.TextColor3 = Color3.new(1,1,1)
-minimizeBtn.Font = Enum.Font.GothamBold
-minimizeBtn.TextSize = 18
-minimizeBtn.BorderSizePixel = 0
-Instance.new("UICorner", minimizeBtn).CornerRadius = UDim.new(0, 6)
-
-local isMinimized = false
-minimizeBtn.MouseButton1Click:Connect(function()
-	isMinimized = not isMinimized
-	if isMinimized then
-		frame.Size = UDim2.new(0, 450, 0, 40)
-		minimizeBtn.Text = "□"
-	else
-		frame.Size = UDim2.new(0, 450, 0.9, 0)
-		minimizeBtn.Text = "─"
-	end
-end)
 
 local closeX = Instance.new("TextButton", titleBar)
 closeX.Size            = UDim2.new(0, 32, 0, 32)
@@ -260,15 +209,6 @@ tabLayout.FillDirection       = Enum.FillDirection.Horizontal
 tabLayout.Padding             = UDim.new(0, 4)
 tabLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 tabLayout.VerticalAlignment   = Enum.VerticalAlignment.Center
-
--- [UI ENHANCEMENT] Tab indicator
-local indicator = Instance.new("Frame", tabBar)
-indicator.Size = UDim2.new(0, 72, 0, 3)
-indicator.Position = UDim2.new(0, 0, 1, -3)
-indicator.BackgroundColor3 = Color3.fromRGB(70, 100, 180)
-indicator.BorderSizePixel = 0
-indicator.Name = "TabIndicator"
-Instance.new("UICorner", indicator).CornerRadius = UDim.new(0, 2)
 
 -- ---- Content Holder ----
 local contentHolder = Instance.new("Frame", frame)
@@ -323,21 +263,6 @@ local function makeButton(parent, txt, color)
 	return b
 end
 
--- [UI ENHANCEMENT] Styled button with hover effect
-local function makeStyledButton(parent, txt, baseColor, hoverColor)
-	local b = makeButton(parent, txt, baseColor)
-	local originalColor = baseColor or Color3.fromRGB(56,56,56)
-	hoverColor = hoverColor or originalColor:Lerp(Color3.new(1,1,1), 0.2)
-	
-	b.MouseEnter:Connect(function()
-		TweenService:Create(b, TweenInfo.new(0.15), {BackgroundColor3 = hoverColor}):Play()
-	end)
-	b.MouseLeave:Connect(function()
-		TweenService:Create(b, TweenInfo.new(0.15), {BackgroundColor3 = originalColor}):Play()
-	end)
-	return b
-end
-
 local function makeLabel(parent, txt)
 	local l = Instance.new("TextLabel")
 	l.Size               = UDim2.new(1, 0, 0, 24)
@@ -349,23 +274,6 @@ local function makeLabel(parent, txt)
 	l.Text               = txt
 	l.Parent             = parent
 	return l
-end
-
--- [UI ENHANCEMENT] Tooltip utility
-local function addTooltip(button, text)
-	local tip = Instance.new("TextLabel", button)
-	tip.Size = UDim2.new(0, 120, 0, 20)
-	tip.Position = UDim2.new(0, 0, 1, 5)
-	tip.BackgroundColor3 = Color3.fromRGB(0,0,0)
-	tip.BackgroundTransparency = 0.2
-	tip.TextColor3 = Color3.new(1,1,1)
-	tip.Text = text
-	tip.Visible = false
-	tip.TextSize = 11
-	tip.Font = Enum.Font.Gotham
-	tip.ZIndex = 100
-	button.MouseEnter:Connect(function() tip.Visible = true end)
-	button.MouseLeave:Connect(function() tip.Visible = false end)
 end
 
 local function makeSlider(parent, labelText, minVal, maxVal, default, onChange)
@@ -407,12 +315,9 @@ local function makeSlider(parent, labelText, minVal, maxVal, default, onChange)
 		or input.UserInputType == Enum.UserInputType.Touch then
 			dragging = true
 			setFromX(input.Position.X)
-			-- [UI ENHANCEMENT] Visual feedback on drag start
-			TweenService:Create(fill, TweenInfo.new(0.1), {BackgroundColor3 = Color3.fromRGB(120,180,255)}):Play()
 			input.Changed:Connect(function()
 				if input.UserInputState == Enum.UserInputState.End then
 					dragging = false
-					TweenService:Create(fill, TweenInfo.new(0.1), {BackgroundColor3 = Color3.fromRGB(80,120,255)}):Play()
 				end
 			end)
 		end
@@ -475,17 +380,6 @@ local function showSection(targetSec)
 	for btn, sec in pairs(TAB_MAP) do
 		btn.BackgroundColor3 = (sec == targetSec) and COLOR_ACTIVE or COLOR_INACTIVE
 	end
-	
-	-- [UI ENHANCEMENT] Animasi tab indicator
-	local targetTab
-	for btn, sec in pairs(TAB_MAP) do
-		if sec == targetSec then targetTab = btn break end
-	end
-	if targetTab then
-		TweenService:Create(indicator, TweenInfo.new(0.2, Enum.EasingStyle.Quad), {
-			Position = UDim2.new(0, targetTab.Position.X.Offset, 1, -3)
-		}):Play()
-	end
 end
 
 for btn, sec in pairs(TAB_MAP) do
@@ -508,21 +402,19 @@ makeSlider(secMove, "Jump Power", 50, 200, state.jump, function(v)
 	end
 end)
 
-local btnNoclip = makeStyledButton(secMove, "Noclip: OFF") -- pakai styled button
+local btnNoclip = makeButton(secMove, "Noclip: OFF")
 btnNoclip.MouseButton1Click:Connect(function()
 	state.noclip = not state.noclip
 	btnNoclip.Text = state.noclip and "Noclip: ON ✅" or "Noclip: OFF ❌"
 	setNoclipConnection()
 end)
-addTooltip(btnNoclip, "Terobos semua objek")
 
-local btnFly = makeStyledButton(secMove, "Fly: OFF")
+local btnFly = makeButton(secMove, "Fly: OFF")
 btnFly.MouseButton1Click:Connect(function()
 	state.fly = not state.fly
 	btnFly.Text = state.fly and "Fly: ON ✈️" or "Fly: OFF"
 	setFlyConnection()
 end)
-addTooltip(btnFly, "Terbang bebas dengan kontrol keyboard")
 
 makeSlider(secMove, "Fly Speed Multiplier", 1, 6, state.flyMult, function(v)
 	state.flyMult = v
@@ -543,7 +435,6 @@ btnInf.MouseButton1Click:Connect(function()
 		end)
 	end
 end)
-addTooltip(btnInf, "Lompat tanpa batas")
 
 -- Click Teleport
 local clickTPBtn = makeButton(secMove, "Click TP: OFF", Color3.fromRGB(120, 120, 255))
@@ -566,7 +457,6 @@ clickTPBtn.MouseButton1Click:Connect(function()
 		end)
 	end
 end)
-addTooltip(clickTPBtn, "Klik di mana saja untuk teleport")
 
 -- Freecam
 local freecamCon
@@ -593,7 +483,6 @@ freecamBtn.MouseButton1Click:Connect(function()
 		if humanoid then Camera.CameraSubject = humanoid end
 	end
 end)
-addTooltip(freecamBtn, "Kamera terbang bebas")
 
 makeSlider(secMove, "Freecam Speed", 1, 10, advanced.freecamSpeed, function(v)
 	advanced.freecamSpeed = v
@@ -629,7 +518,6 @@ btnESP.MouseButton1Click:Connect(function()
 	btnESP.Text = state.esp and "ESP Players: ON 👁️" or "ESP Players: OFF"
 	refreshESP()
 end)
-addTooltip(btnESP, "Tampilkan outline pemain")
 
 Players.PlayerAdded:Connect(function(p)
 	p.CharacterAdded:Connect(function()
@@ -746,7 +634,6 @@ autoResp.MouseButton1Click:Connect(function()
 	state.autoRespawn = not state.autoRespawn
 	autoResp.Text = state.autoRespawn and "Auto Respawn: ON 🔄" or "Auto Respawn: OFF"
 end)
-addTooltip(autoResp, "Respawn otomatis saat mati")
 
 local antiAFKBtn = makeButton(secUtil, "Anti AFK: OFF")
 antiAFKBtn.MouseButton1Click:Connect(function()
@@ -757,6 +644,7 @@ antiAFKBtn.MouseButton1Click:Connect(function()
 			while state.antiAFK do
 				task.wait(60)
 				pcall(function()
+					-- Simulate a tiny virtual input to prevent AFK kick
 					if humanoid then
 						humanoid:ChangeState(Enum.HumanoidStateType.Running)
 					end
@@ -765,7 +653,6 @@ antiAFKBtn.MouseButton1Click:Connect(function()
 		end)
 	end
 end)
-addTooltip(antiAFKBtn, "Cegah kick karena idle")
 
 -- Saved Position / Marker
 local savedCFrame = nil
@@ -906,6 +793,7 @@ tracerBtn.MouseButton1Click:Connect(function()
 end)
 
 RS.Heartbeat:Connect(function()
+	-- Cleanup when disabled
 	if not state.tracers then
 		for _, beam in ipairs(advanced.tracerBeams) do
 			pcall(function() beam:Destroy() end)
@@ -913,6 +801,7 @@ RS.Heartbeat:Connect(function()
 		advanced.tracerBeams = {}
 		return
 	end
+	-- Build beams for new players
 	for _, p in ipairs(Players:GetPlayers()) do
 		if p ~= player and p.Character then
 			local root = p.Character:FindFirstChild("HumanoidRootPart")
@@ -940,6 +829,7 @@ RS.Heartbeat:Connect(function()
 			end
 		end
 	end
+	-- Prune destroyed beams
 	for i = #advanced.tracerBeams, 1, -1 do
 		local beam = advanced.tracerBeams[i]
 		if not beam or not beam.Parent then
@@ -961,6 +851,7 @@ hitboxBtn.MouseButton1Click:Connect(function()
 					if p ~= player and p.Character then
 						for _, part in ipairs(p.Character:GetChildren()) do
 							if part:IsA("BasePart") then
+								-- Clamp max size to avoid extreme values
 								if part.Size.Magnitude < 30 then
 									part.Size = part.Size * 1.1
 								end
@@ -973,1466 +864,504 @@ hitboxBtn.MouseButton1Click:Connect(function()
 	end
 end)
 
--- =============== AI TOOLS — SMART OBJECT SCANNER ===============
---[[
-  Cara kerja:
-    1. Klik "Scan Workspace" → AI scan semua Model di seluruh workspace
-    2. Tampil daftar KATEGORI (nama unik model) beserta jumlahnya
-    3. Pilih kategori → tampil semua instance individual (Wolf 1, Wolf 2, dst)
-    4. Pilih instance → TP ke sana, atau klik "Auto TP Semua" untuk loop
-]]
+-- =============== AI TOOLS ===============
+-- Auto Farm Alpha Wolf
+local autoFarmBtn = makeButton(secAI, "Auto Farm Alpha Wolf: OFF", Color3.fromRGB(255, 140, 0))
+autoFarmBtn.MouseButton1Click:Connect(function()
+	aiState.autoFarm = not aiState.autoFarm
+	autoFarmBtn.Text = aiState.autoFarm and "Auto Farm: ON 🐺" or "Auto Farm: OFF"
+	if aiState.autoFarm then
+		task.spawn(function()
+			local equippedTool = nil
+			while aiState.autoFarm do
+				task.wait(0.2)
+				-- Refresh character reference if needed
+				if not character or not humanoid then
+					character, humanoid = getCharHum()
+				end
+				local myRoot = character and character:FindFirstChild("HumanoidRootPart")
+				if not myRoot then continue end
 
--- ---- State AI Scanner ----
-local scanner = {
-	running      = false,
-	delay        = 1.5,
-	espOn        = false,
-	highlights   = {},
-	categoryData = {},
-	selectedCat  = nil,
-	selectedIdx  = nil,
+				-- Find nearest Alpha Wolf
+				local bestWolf, bestDist = nil, 1000
+				for _, obj in ipairs(workspace:GetDescendants()) do
+					if obj:IsA("Model") and obj.Name == "Alpha Wolf" then
+						local wolfRoot = obj:FindFirstChild("HumanoidRootPart")
+						local wolfHum  = obj:FindFirstChild("Humanoid")
+						if wolfRoot and wolfHum and wolfHum.Health > 0 then
+							local dist = (myRoot.Position - wolfRoot.Position).Magnitude
+							if dist < bestDist then
+								bestDist = dist
+								bestWolf = obj
+							end
+						end
+					end
+				end
+
+				if bestWolf then
+					local wolfRoot = bestWolf.HumanoidRootPart
+					humanoid:MoveTo(wolfRoot.Position)
+
+					if (myRoot.Position - wolfRoot.Position).Magnitude <= 5 then
+						-- Equip best available tool
+						if not equippedTool or equippedTool.Parent ~= character then
+							equippedTool = nil
+							for _, t in ipairs(player.Backpack:GetChildren()) do
+								if t:IsA("Tool") then
+									equippedTool = t
+									break
+								end
+							end
+						end
+						if equippedTool and equippedTool.Parent == player.Backpack then
+							humanoid:EquipTool(equippedTool)
+						end
+						-- Attack
+						if equippedTool and equippedTool.Parent == character then
+							equippedTool:Activate()
+						else
+							-- Fallback: direct damage
+							pcall(function()
+								bestWolf.Humanoid:TakeDamage(15)
+							end)
+						end
+					end
+				end
+			end
+		end)
+	end
+end)
+
+-- Auto Collect Items
+--   FIX: added parentheses to fix operator precedence bug in condition.
+local autoCollectBtn = makeButton(secAI, "Auto Collect Items: OFF")
+autoCollectBtn.MouseButton1Click:Connect(function()
+	aiState.autoCollect = not aiState.autoCollect
+	autoCollectBtn.Text = aiState.autoCollect and "Auto Collect: ON 💰" or "Auto Collect: OFF"
+	if aiState.autoCollect then
+		task.spawn(function()
+			while aiState.autoCollect do
+				task.wait(0.5)
+				local myRoot = character and character:FindFirstChild("HumanoidRootPart")
+				if not myRoot then continue end
+				for _, obj in ipairs(workspace:GetDescendants()) do
+					-- FIX: correct operator precedence with parentheses
+					if (obj:IsA("BasePart") and obj.Name == "Loot")
+					or (obj:IsA("Tool") and obj.CanBeDropped) then
+						local pos = obj:IsA("BasePart") and obj.Position or obj:GetPivot().Position
+						local dist = (myRoot.Position - pos).Magnitude
+						if dist < 8 then
+							myRoot.CFrame = CFrame.new(pos + Vector3.new(0, 3, 0))
+							task.wait(0.1)
+						end
+					end
+				end
+			end
+		end)
+	end
+end)
+
+-- =============== ITEM CHEST TELEPORT ===============
+--[[
+  Chest locations berdasarkan workspace explorer:
+    - workspace (langsung)  → Item Chest2, Item Chest3
+    - workspace.Items       → berbagai item model termasuk chest
+    - workspace.Characters  → Alpha Wolf, dll (NPC, bukan chest)
+  
+  Fungsi ini mencari semua model yang namanya mengandung "Chest"
+  dari SELURUH workspace secara rekursif.
+--]]
+
+-- Status
+local chestState = {
+	autoTP       = false,   -- loop teleport otomatis ke semua chest
+	espChest     = false,   -- highlight semua chest
+	collecting   = false,   -- sedang loop collect
+	delay        = 1,       -- jeda antar teleport (detik)
+	radius       = 10,      -- radius proximity untuk dianggap "selesai"
+	chestList    = {},      -- cache daftar chest terakhir
+	highlights   = {},      -- highlight aktif
 }
 
--- ---- Cari pivot (posisi) dari sebuah Model ----
-local function getModelPivot(model)
-	local root = model:FindFirstChild("HumanoidRootPart")
-	if root then return root end
-	local primary = model.PrimaryPart
-	if primary then return primary end
-	for _, d in ipairs(model:GetDescendants()) do
-		if d:IsA("BasePart") then return d end
+-- ---- Helper: kumpulkan semua model chest dari workspace ----
+local CHEST_KEYWORDS = {"Chest", "chest", "ItemChest", "Item Chest"}
+
+local function isChestModel(obj)
+	if not obj:IsA("Model") then return false end
+	for _, kw in ipairs(CHEST_KEYWORDS) do
+		if string.find(obj.Name, kw, 1, true) then return true end
 	end
-	return nil
+	return false
 end
 
--- ---- Scan seluruh workspace, kelompokkan per nama ----
-local function scanWorkspace()
-	local result = {}
+local function getAllChests()
+	local found = {}
+	-- Cari di seluruh workspace secara rekursif (termasuk folder Items)
 	for _, obj in ipairs(workspace:GetDescendants()) do
-		if obj:IsA("Model") then
-			local pivot = getModelPivot(obj)
+		if isChestModel(obj) then
+			local pivot = obj:FindFirstChild("HumanoidRootPart")
+				or obj:FindFirstChildWhichIsA("BasePart")
 			if pivot then
-				local name = obj.Name
-				if not result[name] then result[name] = {} end
-				table.insert(result[name], { model = obj, pivot = pivot })
+				table.insert(found, { model = obj, part = pivot })
 			end
 		end
 	end
-	return result
+	return found
 end
 
--- ---- Clear semua highlight ----
-local function clearHighlights()
-	for _, h in ipairs(scanner.highlights) do
+-- ---- Helper: bersihkan semua highlight chest ----
+local function clearChestHighlights()
+	for _, h in ipairs(chestState.highlights) do
 		pcall(function() h:Destroy() end)
 	end
-	scanner.highlights = {}
+	chestState.highlights = {}
 end
 
--- ---- Highlight semua item dari kategori ----
-local function highlightCategory(items, color)
-	clearHighlights()
-	if not scanner.espOn then return end
-	color = color or Color3.fromRGB(255, 220, 50)
-	for _, entry in ipairs(items) do
+-- ---- Highlight semua chest (ESP) ----
+local function applyChestESP()
+	clearChestHighlights()
+	local chests = getAllChests()
+	for _, entry in ipairs(chests) do
 		local h = Instance.new("Highlight")
-		h.FillColor           = color
-		h.OutlineColor        = Color3.fromRGB(255, 255, 255)
-		h.FillTransparency    = 0.45
+		h.FillColor           = Color3.fromRGB(255, 220, 50)
+		h.OutlineColor        = Color3.fromRGB(255, 140, 0)
+		h.FillTransparency    = 0.4
 		h.OutlineTransparency = 0
 		h.Adornee             = entry.model
-		h.Parent              = screen
-		table.insert(scanner.highlights, h)
+		h.Parent              = screen   -- screen sudah ada di scope atas
+		table.insert(chestState.highlights, h)
 	end
+	return #chests
 end
 
--- ---- Teleport ke satu entry ----
-local function tpToEntry(entry)
+-- ---- Teleport sekali ke satu chest terdekat ----
+local function teleportToNearestChest()
 	local myRoot = character and character:FindFirstChild("HumanoidRootPart")
-	if not myRoot then return false end
-	if not entry or not entry.pivot or not entry.pivot.Parent then return false end
-	myRoot.CFrame = CFrame.new(entry.pivot.Position + Vector3.new(0, 3.5, 0))
-	return true
-end
+	if not myRoot then return nil, "Karakter tidak ditemukan" end
 
--- ============================================================
--- UI BUILDER (AI Scanner)
--- ============================================================
-makeLabel(secAI, "━━━━━━ 🤖 AI OBJECT SCANNER ━━━━━━")
+	local chests = getAllChests()
+	if #chests == 0 then return nil, "Tidak ada chest di workspace" end
 
-local scanStatusLabel = makeLabel(secAI, "Status: Belum di-scan")
-scanStatusLabel.TextColor3 = Color3.fromRGB(160, 200, 255)
-
-makeSlider(secAI, "Delay antar TP (detik)", 1, 10, scanner.delay, function(v)
-	scanner.delay = v
-end)
-
-local espToggle = makeButton(secAI, "👁 ESP Highlight: OFF", Color3.fromRGB(80, 80, 130))
-espToggle.MouseButton1Click:Connect(function()
-	scanner.espOn = not scanner.espOn
-	espToggle.Text = scanner.espOn and "👁 ESP Highlight: ON" or "👁 ESP Highlight: OFF"
-	if not scanner.espOn then
-		clearHighlights()
-	elseif scanner.selectedCat and scanner.categoryData[scanner.selectedCat] then
-		highlightCategory(scanner.categoryData[scanner.selectedCat])
-	end
-end)
-
-makeLabel(secAI, "── Instance (pilih untuk TP) ──")
-
-local itemPanel = Instance.new("ScrollingFrame", secAI)
-itemPanel.Size                 = UDim2.new(1, 0, 0, 180)
-itemPanel.BackgroundColor3     = Color3.fromRGB(24, 24, 30)
-itemPanel.BorderSizePixel      = 0
-itemPanel.ScrollBarThickness   = 5
-itemPanel.ScrollBarImageColor3 = Color3.fromRGB(100, 100, 130)
-itemPanel.CanvasSize           = UDim2.new(0, 0, 0, 0)
-Instance.new("UICorner", itemPanel).CornerRadius = UDim.new(0, 6)
-
-local itemLayout = Instance.new("UIListLayout", itemPanel)
-itemLayout.Padding = UDim.new(0, 3)
-itemLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-	itemPanel.CanvasSize = UDim2.new(0, 0, 0, itemLayout.AbsoluteContentSize.Y + 8)
-end)
-
-local autoTPBtn = makeButton(secAI, "▶ Auto TP Semua: OFF", Color3.fromRGB(180, 80, 220))
-local stopTPBtn = makeButton(secAI, "⏹ STOP", Color3.fromRGB(180, 40, 40))
-stopTPBtn.Visible = false
-
-stopTPBtn.MouseButton1Click:Connect(function()
-	scanner.running   = false
-	autoTPBtn.Text    = "▶ Auto TP Semua: OFF"
-	stopTPBtn.Visible = false
-end)
-
-local function buildItemPanel(catName)
-	for _, c in ipairs(itemPanel:GetChildren()) do
-		if c:IsA("TextButton") or c:IsA("Frame") or c:IsA("TextLabel") then
-			c:Destroy()
+	local best, bestDist = nil, math.huge
+	for _, entry in ipairs(chests) do
+		local pos  = entry.part.Position
+		local dist = (myRoot.Position - pos).Magnitude
+		if dist < bestDist then
+			best     = entry
+			bestDist = dist
 		end
 	end
 
-	local items = scanner.categoryData[catName]
-	if not items or #items == 0 then
-		local lbl = Instance.new("TextLabel", itemPanel)
-		lbl.Size               = UDim2.new(1, 0, 0, 28)
-		lbl.BackgroundTransparency = 1
-		lbl.TextColor3         = Color3.fromRGB(180, 80, 80)
-		lbl.Font               = Enum.Font.Gotham
-		lbl.TextSize           = 12
-		lbl.Text               = "  Tidak ada instance ditemukan"
-		return
+	if best then
+		local pos = best.part.Position + Vector3.new(0, 3, 0)
+		myRoot.CFrame = CFrame.new(pos)
+		return best.model.Name, bestDist
 	end
-
-	scanner.selectedCat = catName
-	if scanner.espOn then highlightCategory(items) end
-
-	for i, entry in ipairs(items) do
-		local myRoot = character and character:FindFirstChild("HumanoidRootPart")
-		local dist   = myRoot and entry.pivot.Parent
-			and math.floor((myRoot.Position - entry.pivot.Position).Magnitude)
-			or "?"
-
-		local row = Instance.new("Frame", itemPanel)
-		row.Size            = UDim2.new(1, -6, 0, 32)
-		row.BackgroundColor3 = Color3.fromRGB(34, 34, 44)
-		row.BorderSizePixel = 0
-		Instance.new("UICorner", row).CornerRadius = UDim.new(0, 5)
-
-		local nameLbl = Instance.new("TextLabel", row)
-		nameLbl.Size             = UDim2.new(0.65, 0, 1, 0)
-		nameLbl.Position         = UDim2.new(0, 6, 0, 0)
-		nameLbl.BackgroundTransparency = 1
-		nameLbl.TextColor3       = Color3.fromRGB(240, 220, 100)
-		nameLbl.Font             = Enum.Font.Gotham
-		nameLbl.TextSize         = 12
-		nameLbl.TextXAlignment   = Enum.TextXAlignment.Left
-		nameLbl.Text             = string.format("[%d] %s", i, catName)
-
-		local distLbl = Instance.new("TextLabel", row)
-		distLbl.Size             = UDim2.new(0.2, 0, 1, 0)
-		distLbl.Position         = UDim2.new(0.65, 0, 0, 0)
-		distLbl.BackgroundTransparency = 1
-		distLbl.TextColor3       = Color3.fromRGB(140, 200, 140)
-		distLbl.Font             = Enum.Font.Gotham
-		distLbl.TextSize         = 11
-		distLbl.Text             = tostring(dist) .. "st"
-
-		local tpBtn = Instance.new("TextButton", row)
-		tpBtn.Size            = UDim2.new(0.15, 0, 0.8, 0)
-		tpBtn.Position        = UDim2.new(0.85, -2, 0.1, 0)
-		tpBtn.Text            = "TP"
-		tpBtn.BackgroundColor3 = Color3.fromRGB(60, 130, 230)
-		tpBtn.TextColor3      = Color3.new(1, 1, 1)
-		tpBtn.Font            = Enum.Font.GothamBold
-		tpBtn.TextSize        = 11
-		tpBtn.BorderSizePixel = 0
-		Instance.new("UICorner", tpBtn).CornerRadius = UDim.new(0, 4)
-
-		tpBtn.MouseButton1Click:Connect(function()
-			if tpToEntry(entry) then
-				tpBtn.BackgroundColor3 = Color3.fromRGB(40, 160, 40)
-				task.delay(1.2, function()
-					tpBtn.BackgroundColor3 = Color3.fromRGB(60, 130, 230)
-				end)
-			else
-				tpBtn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
-				task.delay(1.2, function()
-					tpBtn.BackgroundColor3 = Color3.fromRGB(60, 130, 230)
-				end)
-			end
-		end)
-	end
+	return nil, "Gagal"
 end
 
-autoTPBtn.MouseButton1Click:Connect(function()
-	local catName = scanner.selectedCat
-	if not catName or not scanner.categoryData[catName] then
-		scanStatusLabel.Text = "❌ Pilih kategori dulu!"
-		return
+-- ============================================================
+-- UI — Tab baru khusus CHEST (ditambahkan ke tab AI Tools)
+-- ============================================================
+makeLabel(secAI, "━━━━━━ 📦 ITEM CHEST TOOLS ━━━━━━")
+
+-- Info label jumlah chest
+local chestCountLabel = makeLabel(secAI, "Chest ditemukan: –")
+
+-- Tombol Scan / Refresh
+local scanChestBtn = makeButton(secAI, "🔍 Scan Semua Chest", Color3.fromRGB(60, 100, 180))
+scanChestBtn.MouseButton1Click:Connect(function()
+	local chests = getAllChests()
+	chestState.chestList = chests
+	chestCountLabel.Text = "Chest ditemukan: " .. #chests
+		.. "  (Chest2 + Chest3 + Items folder)"
+end)
+
+-- ESP Chest Toggle
+local espChestBtn = makeButton(secAI, "👁 ESP Chest: OFF", Color3.fromRGB(180, 130, 0))
+espChestBtn.MouseButton1Click:Connect(function()
+	chestState.espChest = not chestState.espChest
+	if chestState.espChest then
+		local count = applyChestESP()
+		espChestBtn.Text = "👁 ESP Chest: ON (" .. count .. ")"
+	else
+		clearChestHighlights()
+		espChestBtn.Text = "👁 ESP Chest: OFF"
 	end
+end)
 
-	scanner.running   = true
-	autoTPBtn.Text    = "▶ Auto TP: RUNNING..."
-	stopTPBtn.Visible = true
+-- Teleport ke Chest Terdekat (sekali)
+local tpNearestBtn = makeButton(secAI, "📦 TP ke Chest Terdekat", Color3.fromRGB(80, 160, 80))
+tpNearestBtn.MouseButton1Click:Connect(function()
+	local name, info = teleportToNearestChest()
+	if name then
+		tpNearestBtn.Text = "✅ TP → " .. name
+		task.delay(2, function()
+			tpNearestBtn.Text = "📦 TP ke Chest Terdekat"
+		end)
+	else
+		tpNearestBtn.Text = "❌ " .. tostring(info)
+		task.delay(2, function()
+			tpNearestBtn.Text = "📦 TP ke Chest Terdekat"
+		end)
+	end
+end)
 
-	task.spawn(function()
-		while scanner.running do
-			local items = scanner.categoryData[catName]
-			if not items or #items == 0 then
-				scanStatusLabel.Text = "❌ Tidak ada item di kategori ini"
-				break
-			end
+-- Slider delay antar teleport
+makeSlider(secAI, "Delay TP (detik)", 1, 10, chestState.delay, function(v)
+	chestState.delay = v
+end)
 
-			local myRoot = character and character:FindFirstChild("HumanoidRootPart")
-			if not myRoot then task.wait(1); continue end
+-- Slider radius proximity
+makeSlider(secAI, "Radius Kumpul (studs)", 3, 20, chestState.radius, function(v)
+	chestState.radius = v
+end)
 
-			for i, entry in ipairs(items) do
-				if not scanner.running then break end
-				if not entry.pivot or not entry.pivot.Parent then
-					continue
+-- AUTO COLLECT ALL CHESTS — Loop teleport ke semua chest satu per satu
+local autoChestBtn = makeButton(secAI, "🤖 Auto TP Semua Chest: OFF", Color3.fromRGB(200, 80, 200))
+autoChestBtn.MouseButton1Click:Connect(function()
+	chestState.autoTP = not chestState.autoTP
+
+	if chestState.autoTP then
+		autoChestBtn.Text = "🤖 Auto TP Chest: ON ⏹ (klik stop)"
+		task.spawn(function()
+			while chestState.autoTP do
+				local myRoot = character and character:FindFirstChild("HumanoidRootPart")
+				if not myRoot then task.wait(1); continue end
+
+				local chests = getAllChests()
+				if #chests == 0 then
+					autoChestBtn.Text = "🤖 Auto TP: Tidak ada chest!"
+					task.wait(3)
+					chestState.autoTP = false
+					break
 				end
-				tpToEntry(entry)
-				autoTPBtn.Text = string.format(
-					"▶ Auto TP: [%d/%d] %s", i, #items, catName
-				)
-				scanStatusLabel.Text = string.format(
-					"✈️ TP ke %s #%d / %d", catName, i, #items
-				)
-				task.wait(scanner.delay)
+
+				-- Update ESP jika aktif
+				if chestState.espChest then
+					clearChestHighlights()
+					applyChestESP()
+				end
+
+				-- Iterasi setiap chest
+				for i, entry in ipairs(chests) do
+					if not chestState.autoTP then break end
+
+					-- Refresh karakter jika respawn
+					myRoot = character and character:FindFirstChild("HumanoidRootPart")
+					if not myRoot then task.wait(1); break end
+
+					local targetPos = entry.part.Position + Vector3.new(0, 3, 0)
+					myRoot.CFrame   = CFrame.new(targetPos)
+
+					-- Update label progress
+					autoChestBtn.Text = string.format(
+						"🤖 Auto TP: [%d/%d] %s", i, #chests, entry.model.Name
+					)
+
+					task.wait(chestState.delay)
+				end
+
+				-- Satu putaran selesai, scan ulang (chest baru mungkin muncul)
+				task.wait(1)
 			end
-			scanner.running = false
-		end
 
-		autoTPBtn.Text    = "▶ Auto TP Semua: SELESAI ✅"
-		stopTPBtn.Visible = false
-		scanStatusLabel.Text = "✅ Selesai teleport semua " .. (scanner.selectedCat or "")
-		task.delay(3, function()
-			autoTPBtn.Text = "▶ Auto TP Semua: OFF"
+			autoChestBtn.Text = "🤖 Auto TP Semua Chest: OFF"
 		end)
-	end)
+	else
+		autoChestBtn.Text = "🤖 Auto TP Semua Chest: OFF"
+	end
 end)
 
-makeLabel(secAI, "━━━━━━ 📋 KATEGORI OBJEK ━━━━━━")
+-- TELEPORT LIST — tampilkan daftar chest & klik untuk TP langsung
+makeLabel(secAI, "── Daftar Chest (klik untuk TP) ──")
 
-local catPanel = Instance.new("ScrollingFrame", secAI)
-catPanel.Size                 = UDim2.new(1, 0, 0, 220)
-catPanel.BackgroundColor3     = Color3.fromRGB(20, 20, 28)
-catPanel.BorderSizePixel      = 0
-catPanel.ScrollBarThickness   = 5
-catPanel.ScrollBarImageColor3 = Color3.fromRGB(100, 100, 140)
-catPanel.CanvasSize           = UDim2.new(0, 0, 0, 0)
-Instance.new("UICorner", catPanel).CornerRadius = UDim.new(0, 6)
+local chestListFrame = Instance.new("ScrollingFrame", secAI)
+chestListFrame.Size                 = UDim2.new(1, 0, 0, 180)
+chestListFrame.BackgroundColor3     = Color3.fromRGB(28, 28, 28)
+chestListFrame.BorderSizePixel      = 0
+chestListFrame.ScrollBarThickness   = 4
+chestListFrame.ScrollBarImageColor3 = Color3.fromRGB(100, 100, 100)
+chestListFrame.CanvasSize           = UDim2.new(0, 0, 0, 0)
+Instance.new("UICorner", chestListFrame).CornerRadius = UDim.new(0, 6)
 
-local catLayout = Instance.new("UIListLayout", catPanel)
-catLayout.Padding = UDim.new(0, 3)
-catLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-	catPanel.CanvasSize = UDim2.new(0, 0, 0, catLayout.AbsoluteContentSize.Y + 8)
+local chestListLayout = Instance.new("UIListLayout", chestListFrame)
+chestListLayout.Padding = UDim.new(0, 3)
+chestListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+	chestListFrame.CanvasSize = UDim2.new(0, 0, 0,
+		chestListLayout.AbsoluteContentSize.Y + 8)
 end)
 
-local activeCatBtn = nil
-
-local function buildCategoryPanel()
-	for _, c in ipairs(catPanel:GetChildren()) do
-		if c:IsA("TextButton") or c:IsA("Frame") or c:IsA("TextLabel") then
-			c:Destroy()
-		end
+local function buildChestList()
+	-- Bersihkan isi lama
+	for _, c in ipairs(chestListFrame:GetChildren()) do
+		if c:IsA("TextButton") or c:IsA("Frame") then c:Destroy() end
 	end
-	activeCatBtn = nil
 
-	local names = {}
-	for name, _ in pairs(scanner.categoryData) do
-		table.insert(names, name)
-	end
-	table.sort(names)
+	local chests = getAllChests()
+	chestCountLabel.Text = "Chest ditemukan: " .. #chests
 
-	if #names == 0 then
-		local lbl = Instance.new("TextLabel", catPanel)
+	if #chests == 0 then
+		local lbl = Instance.new("TextLabel", chestListFrame)
 		lbl.Size               = UDim2.new(1, 0, 0, 28)
 		lbl.BackgroundTransparency = 1
 		lbl.TextColor3         = Color3.fromRGB(180, 80, 80)
 		lbl.Font               = Enum.Font.Gotham
 		lbl.TextSize           = 12
-		lbl.Text               = "  Tidak ada model ditemukan"
+		lbl.Text               = "  Tidak ada chest ditemukan"
 		return
 	end
 
-	for _, name in ipairs(names) do
-		local items = scanner.categoryData[name]
-		local count = #items
+	for i, entry in ipairs(chests) do
+		local btn = Instance.new("TextButton", chestListFrame)
+		btn.Size            = UDim2.new(1, -6, 0, 28)
+		btn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+		btn.TextColor3      = Color3.fromRGB(255, 220, 80)
+		btn.Font            = Enum.Font.Gotham
+		btn.TextSize        = 12
+		btn.TextXAlignment  = Enum.TextXAlignment.Left
+		btn.Text            = string.format(
+			"  [%d] %s  (%.0f studs)",
+			i,
+			entry.model.Name,
+			(character and character:FindFirstChild("HumanoidRootPart"))
+				and (character.HumanoidRootPart.Position - entry.part.Position).Magnitude
+				or 0
+		)
+		btn.BorderSizePixel = 0
+		Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 4)
 
-		local row = Instance.new("Frame", catPanel)
-		row.Size            = UDim2.new(1, -6, 0, 34)
-		row.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
-		row.BorderSizePixel = 0
-		Instance.new("UICorner", row).CornerRadius = UDim.new(0, 5)
-
-		local catBtn = Instance.new("TextButton", row)
-		catBtn.Size            = UDim2.new(0.78, 0, 1, 0)
-		catBtn.BackgroundTransparency = 1
-		catBtn.TextColor3      = Color3.fromRGB(200, 230, 255)
-		catBtn.Font            = Enum.Font.Gotham
-		catBtn.TextSize        = 12
-		catBtn.TextXAlignment  = Enum.TextXAlignment.Left
-		catBtn.Text            = "  " .. name
-
-		local countLbl = Instance.new("TextLabel", row)
-		countLbl.Size          = UDim2.new(0.22, 0, 1, 0)
-		countLbl.Position      = UDim2.new(0.78, 0, 0, 0)
-		countLbl.BackgroundTransparency = 1
-		countLbl.TextColor3    = Color3.fromRGB(140, 200, 140)
-		countLbl.Font          = Enum.Font.GothamBold
-		countLbl.TextSize      = 12
-		countLbl.Text          = "×" .. count
-
-		catBtn.MouseButton1Click:Connect(function()
-			if activeCatBtn then
-				activeCatBtn.Parent.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+		btn.MouseButton1Click:Connect(function()
+			local myRoot = character and character:FindFirstChild("HumanoidRootPart")
+			if myRoot then
+				myRoot.CFrame = CFrame.new(entry.part.Position + Vector3.new(0, 3, 0))
+				btn.BackgroundColor3 = Color3.fromRGB(40, 100, 40)
+				task.delay(1, function()
+					btn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+				end)
 			end
-			row.BackgroundColor3 = Color3.fromRGB(50, 60, 110)
-			activeCatBtn = catBtn
-
-			scanner.selectedCat = name
-			scanStatusLabel.Text = "📋 " .. name .. "  (" .. count .. " instance)"
-			buildItemPanel(name)
 		end)
 	end
 end
 
-local scanBtn = makeButton(secAI, "🔍 Scan Workspace Sekarang", Color3.fromRGB(60, 130, 200))
-scanBtn.MouseButton1Click:Connect(function()
-	scanStatusLabel.Text = "⏳ Scanning..."
-	task.spawn(function()
-		scanner.categoryData = scanWorkspace()
-		local total = 0
-		local cats  = 0
-		for _, v in pairs(scanner.categoryData) do
-			total = total + #v
-			cats  = cats + 1
-		end
-		buildCategoryPanel()
-		scanStatusLabel.Text = string.format(
-			"✅ %d kategori, %d model ditemukan", cats, total
-		)
-	end)
+-- Tombol refresh daftar
+local refreshListBtn = makeButton(secAI, "🔄 Refresh Daftar Chest", Color3.fromRGB(50, 50, 80))
+refreshListBtn.MouseButton1Click:Connect(function()
+	buildChestList()
+	if chestState.espChest then
+		clearChestHighlights()
+		applyChestESP()
+	end
 end)
 
--- =============== LOST CHILD TELEPORTER (AI TOOLS) ===============
-makeLabel(secAI, "━━━━━━ 👻 LOST CHILD TELEPORTER ━━━━━━")
+-- Build awal saat script load
+task.delay(2, buildChestList)
 
-local lostChildState = {
-    list = {},               -- {model, pivot, name}
-    running = false,
-    delay = 1.5,
-}
+-- =============== COORDINATE TELEPORT ===============
+makeLabel(secMove, "━━━━━━ 📍 COORDINATE TP ━━━━━━")
 
--- Scan semua model yang namanya mengandung "Lost Child"
-local function scanLostChildren()
-    local found = {}
-    for _, obj in ipairs(workspace:GetDescendants()) do
-        if obj:IsA("Model") and obj.Name:find("Lost Child") then
-            local pivot = getModelPivot(obj)  -- fungsi dari scanner
-            if pivot then
-                table.insert(found, {
-                    model = obj,
-                    pivot = pivot,
-                    name = obj.Name,
-                })
-            end
-        end
-    end
-    -- Urutkan berdasarkan nama (Lost Child, Lost Child2, ...)
-    table.sort(found, function(a,b)
-        local na = a.name:gsub("Lost Child", "")
-        local nb = b.name:gsub("Lost Child", "")
-        na = tonumber(na) or 0
-        nb = tonumber(nb) or 0
-        return na < nb
-    end)
-    return found
-end
+local coordFrame = Instance.new("Frame")
+coordFrame.Size = UDim2.new(1, 0, 0, 105)
+coordFrame.BackgroundTransparency = 1
+coordFrame.Parent = secMove
 
-local lostStatusLabel = makeLabel(secAI, "Status: Belum di-scan")
-lostStatusLabel.TextColor3 = Color3.fromRGB(160, 200, 255)
+-- Input X
+local xLabel = makeLabel(coordFrame, "X:")
+xLabel.Size = UDim2.new(0.1, 0, 0, 20)
 
-makeSlider(secAI, "Delay TP (detik)", 1, 5, lostChildState.delay, function(v)
-    lostChildState.delay = v
+local xBox = Instance.new("TextBox", coordFrame)
+xBox.Size = UDim2.new(0.22, 0, 0, 24)
+xBox.Position = UDim2.new(0.1, 0, 0, 0)
+xBox.BackgroundColor3 = Color3.fromRGB(40,40,40)
+xBox.TextColor3 = Color3.new(1,1,1)
+xBox.Text = "0"
+xBox.Font = Enum.Font.Code
+xBox.TextSize = 14
+xBox.ClearTextOnFocus = false
+Instance.new("UICorner", xBox).CornerRadius = UDim.new(0,4)
+
+-- Input Y
+local yLabel = makeLabel(coordFrame, "Y:")
+yLabel.Size = UDim2.new(0.1, 0, 0, 20)
+yLabel.Position = UDim2.new(0.36, 0, 0, 0)
+
+local yBox = Instance.new("TextBox", coordFrame)
+yBox.Size = UDim2.new(0.22, 0, 0, 24)
+yBox.Position = UDim2.new(0.46, 0, 0, 0)
+yBox.BackgroundColor3 = Color3.fromRGB(40,40,40)
+yBox.TextColor3 = Color3.new(1,1,1)
+yBox.Text = "0"
+yBox.Font = Enum.Font.Code
+yBox.TextSize = 14
+yBox.ClearTextOnFocus = false
+Instance.new("UICorner", yBox).CornerRadius = UDim.new(0,4)
+
+-- Input Z
+local zLabel = makeLabel(coordFrame, "Z:")
+zLabel.Size = UDim2.new(0.1, 0, 0, 20)
+zLabel.Position = UDim2.new(0.72, 0, 0, 0)
+
+local zBox = Instance.new("TextBox", coordFrame)
+zBox.Size = UDim2.new(0.22, 0, 0, 24)
+zBox.Position = UDim2.new(0.82, 0, 0, 0)
+zBox.BackgroundColor3 = Color3.fromRGB(40,40,40)
+zBox.TextColor3 = Color3.new(1,1,1)
+zBox.Text = "0"
+zBox.Font = Enum.Font.Code
+zBox.TextSize = 14
+zBox.ClearTextOnFocus = false
+Instance.new("UICorner", zBox).CornerRadius = UDim.new(0,4)
+
+-- Tombol Teleport
+local tpCoordBtn = makeButton(coordFrame, "📍 Teleport to Coords", Color3.fromRGB(70, 130, 200))
+tpCoordBtn.Size = UDim2.new(1, 0, 0, 30)
+tpCoordBtn.Position = UDim2.new(0, 0, 0, 30)
+tpCoordBtn.MouseButton1Click:Connect(function()
+	local x = tonumber(xBox.Text)
+	local y = tonumber(yBox.Text)
+	local z = tonumber(zBox.Text)
+	if not x or not y or not z then
+		tpCoordBtn.Text = "Invalid numbers!"
+		task.wait(2)
+		tpCoordBtn.Text = "📍 Teleport to Coords"
+		return
+	end
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	if root then
+		root.CFrame = CFrame.new(x, y, z)
+		tpCoordBtn.BackgroundColor3 = Color3.fromRGB(40,160,40)
+		task.delay(1.2, function()
+			tpCoordBtn.BackgroundColor3 = Color3.fromRGB(70,130,200)
+		end)
+	else
+		tpCoordBtn.Text = "No character!"
+		task.wait(2)
+		tpCoordBtn.Text = "📍 Teleport to Coords"
+	end
 end)
 
--- Panel daftar
-local lostChildPanel = Instance.new("ScrollingFrame", secAI)
-lostChildPanel.Size = UDim2.new(1, 0, 0, 180)
-lostChildPanel.BackgroundColor3 = Color3.fromRGB(24, 24, 30)
-lostChildPanel.BorderSizePixel = 0
-lostChildPanel.ScrollBarThickness = 5
-lostChildPanel.ScrollBarImageColor3 = Color3.fromRGB(100, 100, 130)
-lostChildPanel.CanvasSize = UDim2.new(0, 0, 0, 0)
-Instance.new("UICorner", lostChildPanel).CornerRadius = UDim.new(0, 6)
-
-local lostLayout = Instance.new("UIListLayout", lostChildPanel)
-lostLayout.Padding = UDim.new(0, 3)
-lostLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-    lostChildPanel.CanvasSize = UDim2.new(0, 0, 0, lostLayout.AbsoluteContentSize.Y + 8)
+-- Tombol Get Current Position
+local getPosBtn = makeButton(coordFrame, "📋 Get Current Position", Color3.fromRGB(100, 100, 100))
+getPosBtn.Size = UDim2.new(1, 0, 0, 24)
+getPosBtn.Position = UDim2.new(0, 0, 0, 65)
+getPosBtn.MouseButton1Click:Connect(function()
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	if root then
+		local pos = root.Position
+		xBox.Text = tostring(math.floor(pos.X * 10 + 0.5) / 10) -- akurat 1 desimal
+		yBox.Text = tostring(math.floor(pos.Y * 10 + 0.5) / 10)
+		zBox.Text = tostring(math.floor(pos.Z * 10 + 0.5) / 10)
+		getPosBtn.Text = "✅ Posisi disalin"
+		task.delay(1.2, function()
+			getPosBtn.Text = "📋 Get Current Position"
+		end)
+	else
+		getPosBtn.Text = "No character!"
+		task.delay(1.2, function()
+			getPosBtn.Text = "📋 Get Current Position"
+		end)
+	end
 end)
-
--- Fungsi teleport ke Lost Child tertentu
-local function tpToLostChild(entry)
-    local myRoot = character and character:FindFirstChild("HumanoidRootPart")
-    if not myRoot then return false end
-    if not entry.pivot or not entry.pivot.Parent then return false end
-    myRoot.CFrame = CFrame.new(entry.pivot.Position + Vector3.new(0, 3.5, 0))
-    return true
-end
-
--- Isi panel
-local function fillLostChildPanel()
-    for _, child in ipairs(lostChildPanel:GetChildren()) do
-        if child:IsA("Frame") then child:Destroy() end
-    end
-
-    local list = lostChildState.list
-    if #list == 0 then
-        local lbl = Instance.new("TextLabel", lostChildPanel)
-        lbl.Size = UDim2.new(1, 0, 0, 28)
-        lbl.BackgroundTransparency = 1
-        lbl.TextColor3 = Color3.fromRGB(180, 80, 80)
-        lbl.Font = Enum.Font.Gotham
-        lbl.TextSize = 12
-        lbl.Text = "  Tidak ada Lost Child ditemukan"
-        return
-    end
-
-    for i, entry in ipairs(list) do
-        local row = Instance.new("Frame", lostChildPanel)
-        row.Size = UDim2.new(1, -6, 0, 32)
-        row.BackgroundColor3 = Color3.fromRGB(34, 34, 44)
-        row.BorderSizePixel = 0
-        Instance.new("UICorner", row).CornerRadius = UDim.new(0, 5)
-
-        local nameLbl = Instance.new("TextLabel", row)
-        nameLbl.Size = UDim2.new(0.6, 0, 1, 0)
-        nameLbl.Position = UDim2.new(0, 4, 0, 0)
-        nameLbl.BackgroundTransparency = 1
-        nameLbl.TextColor3 = Color3.fromRGB(240, 220, 100)
-        nameLbl.Font = Enum.Font.Gotham
-        nameLbl.TextSize = 12
-        nameLbl.TextXAlignment = Enum.TextXAlignment.Left
-        nameLbl.Text = string.format("[%d] %s", i, entry.name)
-
-        local distLbl = Instance.new("TextLabel", row)
-        distLbl.Size = UDim2.new(0.2, 0, 1, 0)
-        distLbl.Position = UDim2.new(0.6, 0, 0, 0)
-        distLbl.BackgroundTransparency = 1
-        distLbl.TextColor3 = Color3.fromRGB(140, 200, 140)
-        distLbl.Font = Enum.Font.Gotham
-        distLbl.TextSize = 10
-        local myRoot = character and character:FindFirstChild("HumanoidRootPart")
-        local dist = myRoot and entry.pivot.Parent and math.floor((myRoot.Position - entry.pivot.Position).Magnitude) or "?"
-        distLbl.Text = tostring(dist) .. "st"
-
-        local tpBtn = Instance.new("TextButton", row)
-        tpBtn.Size = UDim2.new(0.2, 0, 0.8, 0)
-        tpBtn.Position = UDim2.new(0.8, 0, 0.1, 0)
-        tpBtn.Text = "TP"
-        tpBtn.BackgroundColor3 = Color3.fromRGB(60, 130, 230)
-        tpBtn.TextColor3 = Color3.new(1,1,1)
-        tpBtn.Font = Enum.Font.GothamBold
-        tpBtn.TextSize = 11
-        Instance.new("UICorner", tpBtn).CornerRadius = UDim.new(0, 4)
-
-        tpBtn.MouseButton1Click:Connect(function()
-            if tpToLostChild(entry) then
-                tpBtn.BackgroundColor3 = Color3.fromRGB(40, 160, 40)
-                task.delay(1.2, function()
-                    tpBtn.BackgroundColor3 = Color3.fromRGB(60, 130, 230)
-                end)
-            else
-                tpBtn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
-                task.delay(1.2, function()
-                    tpBtn.BackgroundColor3 = Color3.fromRGB(60, 130, 230)
-                end)
-            end
-        end)
-    end
-end
-
--- Tombol Scan
-local scanLostBtn = makeButton(secAI, "🔍 Scan Lost Children", Color3.fromRGB(60, 130, 200))
-scanLostBtn.MouseButton1Click:Connect(function()
-    lostStatusLabel.Text = "⏳ Scanning..."
-    lostChildState.list = scanLostChildren()
-    fillLostChildPanel()
-    lostStatusLabel.Text = string.format("✅ %d Lost Child ditemukan", #lostChildState.list)
-end)
-
--- Tombol TP All (berurutan)
-local tpAllLostBtn = makeButton(secAI, "▶ TP Semua (Loop)", Color3.fromRGB(180, 80, 220))
-local stopLostBtn = makeButton(secAI, "⏹ STOP", Color3.fromRGB(180, 40, 40))
-stopLostBtn.Visible = false
-
-tpAllLostBtn.MouseButton1Click:Connect(function()
-    if lostChildState.running then
-        lostChildState.running = false
-        tpAllLostBtn.Text = "▶ TP Semua (Loop)"
-        stopLostBtn.Visible = false
-        lostStatusLabel.Text = "Berhenti"
-        return
-    end
-
-    if #lostChildState.list == 0 then
-        lostStatusLabel.Text = "❌ Scan dulu sebelum TP All!"
-        return
-    end
-
-    lostChildState.running = true
-    tpAllLostBtn.Text = "⏸ TP All Running..."
-    stopLostBtn.Visible = true
-
-    task.spawn(function()
-        while lostChildState.running do
-            for i, entry in ipairs(lostChildState.list) do
-                if not lostChildState.running then break end
-                if not entry.pivot or not entry.pivot.Parent then
-                    lostStatusLabel.Text = string.format("⚠️ %s sudah hilang", entry.name)
-                    continue
-                end
-                local success = tpToLostChild(entry)
-                if success then
-                    lostStatusLabel.Text = string.format("✈️ TP %s (%d/%d)", entry.name, i, #lostChildState.list)
-                else
-                    lostStatusLabel.Text = "❌ Gagal TP " .. entry.name
-                end
-                task.wait(lostChildState.delay)
-            end
-            lostStatusLabel.Text = "✅ Selesai satu putaran. Mulai lagi..."
-        end
-        tpAllLostBtn.Text = "▶ TP Semua (Loop)"
-        stopLostBtn.Visible = false
-        lostStatusLabel.Text = "Berhenti"
-    end)
-end)
-
-stopLostBtn.MouseButton1Click:Connect(function()
-    lostChildState.running = false
-    tpAllLostBtn.Text = "▶ TP Semua (Loop)"
-    stopLostBtn.Visible = false
-    lostStatusLabel.Text = "Berhenti"
-end)
-
-makeLabel(secAI, "💡 Tips: Gunakan fitur ini untuk berpindah antar Lost Child dengan cepat.")
-
--- =============== REMOTE SNIFFER & CODE COPIER (SAFE VERSION) ===============
-makeLabel(secAI, "━━━━━━ 🕵️ REMOTE SNIFFER (SAFE) ━━━━━━")
-
-local snifferState = {
-    remotes = {},                -- { object, path, type, arguments = {}, clientCalls = {} }
-    isHooking = false,
-    hookConnection = nil,
-    spyConnections = {},        -- koneksi OnClientEvent untuk mendengar server
-}
-
--- Fungsi path aman
-local function getPathSafe(obj)
-    local path = obj.Name
-    local parent = obj.Parent
-    while parent and parent ~= game do
-        path = parent.Name .. "." .. path
-        parent = parent.Parent
-    end
-    return (parent and parent.ClassName or "game") .. "." .. path
-end
-
--- Scan semua remote
-local function scanAllRemotes()
-    snifferState.remotes = {}
-    local remotes = {}
-    for _, obj in ipairs(game:GetDescendants()) do
-        if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
-            local path = getPathSafe(obj)
-            table.insert(remotes, {
-                object = obj,
-                path = path,
-                type = obj.ClassName,
-                arguments = {},       -- client -> server (harus manual input)
-                serverCalls = {},     -- server -> client (tertangkap)
-                spyConnection = nil,
-            })
-        end
-    end
-    -- Simpan di state
-    for _, r in ipairs(remotes) do
-        snifferState.remotes[r.path] = r
-    end
-    return remotes
-end
-
--- Inject Spy: buat koneksi OnClientEvent untuk semua remote yang ditemukan
-local function injectSpyOnClientEvents()
-    -- Bersihkan spy lama
-    for _, r in pairs(snifferState.remotes) do
-        if r.spyConnection then
-            r.spyConnection:Disconnect()
-            r.spyConnection = nil
-        end
-    end
-    for _, r in pairs(snifferState.remotes) do
-        if r.object:IsA("RemoteEvent") then
-            local conn
-            conn = r.object.OnClientEvent:Connect(function(...)
-                local args = {...}
-                table.insert(r.serverCalls, args)
-                if #r.serverCalls > 10 then
-                    table.remove(r.serverCalls, 1)
-                end
-            end)
-            r.spyConnection = conn
-        elseif r.object:IsA("RemoteFunction") then
-            local conn
-            conn = r.object.OnClientInvoke:Connect(function(...)
-                local args = {...}
-                table.insert(r.serverCalls, args)
-                if #r.serverCalls > 10 then
-                    table.remove(r.serverCalls, 1)
-                end
-            end)
-            r.spyConnection = conn
-        end
-    end
-end
-
--- UI Elements
-local snifferStatusLabel = makeLabel(secAI, "Status: Idle")
-snifferStatusLabel.TextColor3 = Color3.fromRGB(160, 200, 255)
-
--- Tombol Scan
-local scanRemotesBtn = makeButton(secAI, "🔍 Scan Remotes", Color3.fromRGB(60, 130, 200))
-scanRemotesBtn.MouseButton1Click:Connect(function()
-    snifferStatusLabel.Text = "⏳ Scanning..."
-    scanAllRemotes()
-    local count = 0
-    for _, _ in pairs(snifferState.remotes) do count = count + 1 end
-    snifferStatusLabel.Text = string.format("✅ %d remote ditemukan", count)
-    updateSnifferList()
-end)
-
--- Tombol Inject Spy (dengar panggilan server -> client)
-local injectSpyBtn = makeButton(secAI, "🕵️ Inject Spy", Color3.fromRGB(100, 180, 100))
-injectSpyBtn.MouseButton1Click:Connect(function()
-    injectSpyOnClientEvents()
-    snifferStatusLabel.Text = "🔴 Spy aktif - mendengarkan server calls"
-end)
-
--- Tombol Clear
-local clearSnifferBtn = makeButton(secAI, "🗑️ Clear", Color3.fromRGB(100, 100, 100))
-clearSnifferBtn.MouseButton1Click:Connect(function()
-    for _, r in pairs(snifferState.remotes) do
-        if r.spyConnection then
-            r.spyConnection:Disconnect()
-            r.spyConnection = nil
-        end
-    end
-    snifferState.remotes = {}
-    updateSnifferList()
-    snifferStatusLabel.Text = "Data dibersihkan"
-end)
-
--- Panel daftar
-local snifferListPanel = Instance.new("ScrollingFrame", secAI)
-snifferListPanel.Size = UDim2.new(1, 0, 0, 180)
-snifferListPanel.BackgroundColor3 = Color3.fromRGB(22, 22, 30)
-snifferListPanel.BorderSizePixel = 0
-snifferListPanel.ScrollBarThickness = 5
-snifferListPanel.ScrollBarImageColor3 = Color3.fromRGB(100, 100, 130)
-snifferListPanel.CanvasSize = UDim2.new(0, 0, 0, 0)
-Instance.new("UICorner", snifferListPanel).CornerRadius = UDim.new(0, 6)
-
-local snifferListLayout = Instance.new("UIListLayout", snifferListPanel)
-snifferListLayout.Padding = UDim.new(0, 4)
-snifferListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-    snifferListPanel.CanvasSize = UDim2.new(0, 0, 0, snifferListLayout.AbsoluteContentSize.Y + 10)
-end)
-
-function updateSnifferList()
-    -- Bersihkan
-    for _, child in ipairs(snifferListPanel:GetChildren()) do
-        if child:IsA("Frame") then child:Destroy() end
-    end
-
-    local sorted = {}
-    for _, r in pairs(snifferState.remotes) do
-        table.insert(sorted, r)
-    end
-    table.sort(sorted, function(a,b) return a.path < b.path end)
-
-    for _, r in ipairs(sorted) do
-        local row = Instance.new("Frame", snifferListPanel)
-        row.Size = UDim2.new(1, -4, 0, 50)
-        row.BackgroundColor3 = (r.type == "RemoteEvent") and Color3.fromRGB(30,30,50) or Color3.fromRGB(50,30,30)
-        row.BorderSizePixel = 0
-        Instance.new("UICorner", row).CornerRadius = UDim.new(0, 5)
-
-        local info = r.path .. " [" .. r.type .. "]\n"
-        if #r.serverCalls > 0 then
-            local lastCall = r.serverCalls[#r.serverCalls]
-            info = info .. "S→C: " .. table.concat(lastCall, ", "):sub(1,80)
-        else
-            info = info .. "S→C: (none)"
-        end
-
-        local infoLbl = Instance.new("TextLabel", row)
-        infoLbl.Size = UDim2.new(0.85, 0, 1, 0)
-        infoLbl.BackgroundTransparency = 1
-        infoLbl.TextColor3 = Color3.new(1,1,1)
-        infoLbl.Font = Enum.Font.Code
-        infoLbl.TextSize = 10
-        infoLbl.TextXAlignment = Enum.TextXAlignment.Left
-        infoLbl.TextYAlignment = Enum.TextYAlignment.Top
-        infoLbl.Text = info
-
-        -- Copy path button
-        local copyBtn = Instance.new("TextButton", row)
-        copyBtn.Size = UDim2.new(0.15, 0, 1, 0)
-        copyBtn.Position = UDim2.new(0.85, 0, 0, 0)
-        copyBtn.Text = "📋"
-        copyBtn.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
-        copyBtn.TextColor3 = Color3.new(1,1,1)
-        copyBtn.Font = Enum.Font.GothamBold
-        copyBtn.TextSize = 14
-        Instance.new("UICorner", copyBtn).CornerRadius = UDim.new(0, 4)
-        copyBtn.MouseButton1Click:Connect(function()
-            pcall(function()
-                if setclipboard then
-                    setclipboard(r.path)
-                    snifferStatusLabel.Text = "📋 Path disalin: " .. r.path
-                else
-                    snifferStatusLabel.Text = "⚠️ Clipboard not available"
-                end
-            end)
-        end)
-    end
-    snifferListPanel.CanvasSize = UDim2.new(0, 0, 0, snifferListLayout.AbsoluteContentSize.Y + 10)
-end
-
--- Copy All Info (siap kirim ke developer)
-local copyAllBtn = makeStyledButton(secAI, "📤 Copy All Remote Info", Color3.fromRGB(80, 80, 180))
-copyAllBtn.MouseButton1Click:Connect(function()
-    local fullText = ""
-    for _, r in pairs(snifferState.remotes) do
-        fullText = fullText .. r.path .. " (" .. r.type .. ")\n"
-        if #r.serverCalls > 0 then
-            fullText = fullText .. "   S→C Args: "
-            local lastCall = r.serverCalls[#r.serverCalls]
-            fullText = fullText .. table.concat(lastCall, ", ") .. "\n"
-        else
-            fullText = fullText .. "   S→C Args: (no data)\n"
-        end
-    end
-    if fullText == "" then
-        snifferStatusLabel.Text = "⚠️ Tidak ada data untuk disalin"
-        return
-    end
-    -- Fallback: tampilkan di output box agar user bisa select & copy
-    pcall(function()
-        if setclipboard then
-            setclipboard(fullText)
-            snifferStatusLabel.Text = "✅ Semua info remote disalin ke clipboard"
-        else
-            snifferStatusLabel.Text = "📋 Klik kanan > Select All (data di output Developer)"
-            print("=== COPY START ===")
-            print(fullText)
-            print("=== COPY END ===")
-        end
-    end)
-end)
-
--- =============== PATCH: FITUR "PULL TO ME" DI SCANNER ===============
--- Fungsi ini akan memodifikasi fungsi buildItemPanel yang sudah ada
--- dengan menambahkan tombol "Pull" di setiap row.
-
-local originalBuildItemPanel = buildItemPanel
-buildItemPanel = function(catName)
-    originalBuildItemPanel(catName)  -- panggil dulu yang asli (agar TP tetap ada)
-    
-    -- Sekarang kita tambahkan tombol "Pull" pada setiap row yang sudah dibuat
-    -- (Row terakhir di itemPanel adalah yang baru saja dibuat oleh originalBuildItemPanel)
-    local rows = {}
-    for _, child in ipairs(itemPanel:GetChildren()) do
-        if child:IsA("Frame") and child:FindFirstChild("TextLabel") then
-            table.insert(rows, child)
-        end
-    end
-    
-    local items = scanner.categoryData[catName]
-    if not items then return end
-
-    for i, row in ipairs(rows) do
-        if i > #items then break end
-        local entry = items[i]
-        
-        -- Cek apakah row sudah punya tombol Pull (hindari duplikasi)
-        if row:FindFirstChild("PullBtn") then continue end
-        
-        -- Buat tombol Pull
-        local pullBtn = Instance.new("TextButton", row)
-        pullBtn.Name = "PullBtn"
-        pullBtn.Size = UDim2.new(0.15, 0, 0.8, 0)
-        pullBtn.Position = UDim2.new(0.7, 0, 0.1, 0)  -- di antara nama dan TP
-        pullBtn.Text = "⬇"
-        pullBtn.BackgroundColor3 = Color3.fromRGB(160, 80, 160)
-        pullBtn.TextColor3 = Color3.new(1,1,1)
-        pullBtn.Font = Enum.Font.GothamBold
-        pullBtn.TextSize = 14
-        Instance.new("UICorner", pullBtn).CornerRadius = UDim.new(0,4)
-        
-        pullBtn.MouseButton1Click:Connect(function()
-            local myRoot = character and character:FindFirstChild("HumanoidRootPart")
-            if not myRoot then return end
-            if not entry.pivot or not entry.pivot.Parent then return end
-            
-            -- Coba pindahkan objek ke pemain
-            local target = entry.pivot
-            local success = pcall(function()
-                -- Jika objek adalah Model, pindahkan PrimaryPart-nya
-                if entry.model:IsA("Model") then
-                    local primary = entry.model.PrimaryPart or target
-                    primary.CFrame = myRoot.CFrame * CFrame.new(0, 3, 0)
-                else
-                    target.CFrame = myRoot.CFrame * CFrame.new(0, 3, 0)
-                end
-            end)
-            
-            if success then
-                pullBtn.BackgroundColor3 = Color3.fromRGB(40, 180, 40)
-                task.delay(1.2, function()
-                    pullBtn.BackgroundColor3 = Color3.fromRGB(160, 80, 160)
-                end)
-            else
-                pullBtn.BackgroundColor3 = Color3.fromRGB(200, 40, 40)
-                task.delay(1.2, function()
-                    pullBtn.BackgroundColor3 = Color3.fromRGB(160, 80, 160)
-                end)
-            end
-        end)
-    end
-end
-
--- =============== INVENTORY EXPLOIT (DEBUG VERSION) ===============
-makeLabel(secAI, "━━━━━━ 💣 EXPLOIT INVENTORY (v3 Debug) ━━━━━━")
-
-local exploitState = {
-    itemName = "Fuel Canister",
-    spamCount = 10,
-}
-
--- Status label sendiri untuk exploit
-local exploitStatusLabel = makeLabel(secAI, "Status: Idle")
-exploitStatusLabel.TextColor3 = Color3.fromRGB(255, 200, 100)
-
-makeLabel(secAI, "Nama Item:")
-local exploitItemNameBox = Instance.new("TextBox", secAI)
-exploitItemNameBox.Size = UDim2.new(1, 0, 0, 28)
-exploitItemNameBox.BackgroundColor3 = Color3.fromRGB(34, 34, 44)
-exploitItemNameBox.TextColor3 = Color3.new(1,1,1)
-exploitItemNameBox.Font = Enum.Font.Gotham
-exploitItemNameBox.Text = exploitState.itemName
-exploitItemNameBox.TextSize = 13
-exploitItemNameBox.ClearTextOnFocus = false
-Instance.new("UICorner", exploitItemNameBox).CornerRadius = UDim.new(0,4)
-exploitItemNameBox.FocusLost:Connect(function()
-    exploitState.itemName = exploitItemNameBox.Text
-end)
-
-makeSlider(secAI, "Jumlah Spam", 1, 50, exploitState.spamCount, function(v)
-    exploitState.spamCount = v
-end)
-
--- Fungsi mencari remote global (fallback kalau sniffer kosong)
-local function findRemoteGlobal(name)
-    for _, obj in ipairs(game:GetDescendants()) do
-        if (obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction")) and obj.Name == name then
-            return obj
-        end
-    end
-    return nil
-end
-
--- Fungsi mendapatkan remote: pertama dari sniffer, lalu global
-local function getRemote(name)
-    -- Cek di sniffer dulu
-    if snifferState and snifferState.remotes then
-        for path, data in pairs(snifferState.remotes) do
-            if data.object and data.object.Name == name then
-                return data.object, path
-            end
-        end
-    end
-    -- Fallback global
-    local remote = findRemoteGlobal(name)
-    if remote then
-        return remote, remote:GetFullName()
-    end
-    return nil, nil
-end
-
--- Fungsi spam yang aman
-local function spamRemote(remote, remoteName, args)
-    if not remote then
-        exploitStatusLabel.Text = "❌ Remote " .. remoteName .. " tidak ditemukan"
-        return
-    end
-    local isFunction = remote:IsA("RemoteFunction")
-    local method = isFunction and "InvokeServer" or "FireServer"
-    local success = 0
-    local fails = 0
-    for _ = 1, exploitState.spamCount do
-        task.spawn(function()
-            local ok, err = pcall(function()
-                remote[method](remote, unpack(args or {}))
-            end)
-            if ok then success = success + 1 else fails = fails + 1 end
-        end)
-    end
-    task.wait(0.2)
-    exploitStatusLabel.Text = string.format("✅ %s: %d ok, %d gagal", remoteName, success, fails)
-end
-
--- Daftar nama remote target
-local exploitRemoteNames = {
-    "RequestBagDropItem",
-    "RequestGiveItemToNPC",
-    "RequestConsumeItem",
-    "RequestScrapItem",
-    "CraftItem",
-    "RequestCollectCandy",
-    "RequestCollectCoints",
-}
-
--- Buat tombol untuk setiap remote
-for _, name in ipairs(exploitRemoteNames) do
-    local remote, path = getRemote(name)
-    local btnColor = remote and Color3.fromRGB(200, 100, 50) or Color3.fromRGB(80, 80, 80)
-    local btn = makeButton(secAI, "💣 " .. name, btnColor)
-    btn.MouseButton1Click:Connect(function()
-        -- Refresh remote setiap klik (bisa saja baru ada)
-        local r, p = getRemote(name)
-        if not r then
-            exploitStatusLabel.Text = "❌ " .. name .. " tidak ditemukan. Coba Scan Remotes dulu."
-            return
-        end
-        local args = (name == "RequestCollectCandy" or name == "RequestCollectCoints") and {} or {exploitState.itemName}
-        spamRemote(r, name, args)
-    end)
-end
-
--- Tombol SPAM ALL
-local spamAllBtn = makeStyledButton(secAI, "💥 SPAM ALL", Color3.fromRGB(255, 50, 50))
-spamAllBtn.MouseButton1Click:Connect(function()
-    local totalOk, totalFail = 0, 0
-    for _, name in ipairs(exploitRemoteNames) do
-        local r, _ = getRemote(name)
-        if r then
-            local args = (name == "RequestCollectCandy" or name == "RequestCollectCoints") and {} or {exploitState.itemName}
-            spamRemote(r, name, args)
-        else
-            exploitStatusLabel.Text = "❌ " .. name .. " tidak ditemukan, skip"
-        end
-    end
-end)
-
-makeLabel(secAI, "⛔ Pastikan klik 'Scan Remotes' dulu jika tombol abu-abu.")
-
--- =============== GAME ANALYZER & DATA COPIER (AI TOOLS) ===============
-makeLabel(secAI, "━━━━━━ 📊 GAME ANALYZER & COPIER ━━━━━━")
-
-local analyzerState = {
-    fullReport = "",
-}
-
--- Fungsi untuk mendapatkan semua remote dengan path aman
-local function getPathSafe(obj)
-    local path = obj.Name
-    local parent = obj.Parent
-    while parent and parent ~= game do
-        path = parent.Name .. "." .. path
-        parent = parent.Parent
-    end
-    return (parent and parent.ClassName or "game") .. "." .. path
-end
-
-local function analyzeGame()
-    local report = "=== GAME ANALYSIS REPORT ===\n\n"
-
-    -- Info dasar game
-    report = report .. "PlaceId: " .. (game.PlaceId or "?") .. "\n"
-    report = report .. "Game Name: " .. (game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name or "?") .. "\n\n"
-
-    -- 1. Semua RemoteEvent/RemoteFunction
-    report = report .. "--- REMOTE EVENTS & FUNCTIONS ---\n"
-    local remotes = {}
-    for _, obj in ipairs(game:GetDescendants()) do
-        if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
-            local path = getPathSafe(obj)
-            table.insert(remotes, {obj = obj, path = path, type = obj.ClassName})
-        end
-    end
-    table.sort(remotes, function(a,b) return a.path < b.path end)
-    for _, r in ipairs(remotes) do
-        report = report .. r.path .. " [" .. r.type .. "]\n"
-    end
-    report = report .. "\n"
-
-    -- 2. Model unik di Workspace dengan atribut mencurigakan
-    report = report .. "--- WORKSPACE MODELS (Unique) ---\n"
-    local modelCategories = {}
-    for _, obj in ipairs(workspace:GetDescendants()) do
-        if obj:IsA("Model") then
-            local name = obj.Name
-            if not modelCategories[name] then
-                modelCategories[name] = {count = 0, first = obj}
-            end
-            modelCategories[name].count = modelCategories[name].count + 1
-        end
-    end
-    local sortedNames = {}
-    for name, _ in pairs(modelCategories) do table.insert(sortedNames, name) end
-    table.sort(sortedNames)
-
-    for _, name in ipairs(sortedNames) do
-        local data = modelCategories[name]
-        local sample = data.first
-        local attrs = {}
-        -- Cek atribut penting
-        local owner = sample:GetAttribute("Owner")
-        local lastOwner = sample:GetAttribute("LastOwner")
-        local interacted = sample:GetAttribute("InteractedWith")
-        local burnFuel = sample:GetAttribute("BurnFuel")
-        if owner then attrs["Owner"] = owner end
-        if lastOwner then attrs["LastOwner"] = lastOwner end
-        if interacted ~= nil then attrs["InteractedWith"] = tostring(interacted) end
-        if burnFuel then attrs["BurnFuel"] = burnFuel end
-
-        report = report .. string.format("%s (x%d)", name, data.count)
-        if next(attrs) then
-            report = report .. " | "
-            for k, v in pairs(attrs) do
-                report = report .. k .. "=" .. tostring(v) .. " "
-            end
-        end
-        report = report .. "\n"
-    end
-
-    -- 3. LocalScripts di PlayerGui / StarterGui (potensi anti-cheat)
-    report = report .. "\n--- LOCAL SCRIPTS (PlayerGui/StarterGui) ---\n"
-    local function listScripts(parent, indent)
-        local result = ""
-        for _, child in ipairs(parent:GetChildren()) do
-            if child:IsA("LocalScript") or child:IsA("ModuleScript") then
-                result = result .. string.rep("  ", indent) .. child.Name .. " (" .. child.ClassName .. ")\n"
-            end
-            if child:IsA("Folder") or child:IsA("ScreenGui") or child:IsA("Frame") then
-                result = result .. string.rep("  ", indent) .. child.Name .. "/\n"
-                result = result .. listScripts(child, indent + 1)
-            end
-        end
-        return result
-    end
-    local playerGui = player:WaitForChild("PlayerGui")
-    report = report .. "PlayerGui:\n" .. listScripts(playerGui, 1)
-    local starterGui = game:GetService("StarterGui")
-    report = report .. "StarterGui:\n" .. listScripts(starterGui, 1)
-
-    return report
-end
-
--- UI Komponen
-local analyzerStatusLabel = makeLabel(secAI, "Status: Siap")
-analyzerStatusLabel.TextColor3 = Color3.fromRGB(160, 200, 255)
-
--- Tombol Scan
-local scanAnalyzerBtn = makeStyledButton(secAI, "🔍 Scan Game Data", Color3.fromRGB(60, 130, 200))
-scanAnalyzerBtn.MouseButton1Click:Connect(function()
-    analyzerStatusLabel.Text = "⏳ Menganalisis game..."
-    task.spawn(function()
-        local report = analyzeGame()
-        analyzerState.fullReport = report
-        analyzerOutputBox.Text = report
-        analyzerStatusLabel.Text = "✅ Analisis selesai. Klik Copy untuk menyalin."
-    end)
-end)
-
--- Output box (bisa di-scroll)
-local analyzerOutputBox = Instance.new("TextBox", secAI)
-analyzerOutputBox.Size = UDim2.new(1, 0, 0, 180)
-analyzerOutputBox.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
-analyzerOutputBox.TextColor3 = Color3.new(0.8, 1, 0.8)
-analyzerOutputBox.Font = Enum.Font.Code
-analyzerOutputBox.TextSize = 11
-analyzerOutputBox.TextXAlignment = Enum.TextXAlignment.Left
-analyzerOutputBox.TextYAlignment = Enum.TextYAlignment.Top
-analyzerOutputBox.MultiLine = true
-analyzerOutputBox.Text = "Hasil analisis akan muncul di sini..."
-analyzerOutputBox.BorderSizePixel = 0
-analyzerOutputBox.ClearTextOnFocus = false
-Instance.new("UICorner", analyzerOutputBox).CornerRadius = UDim.new(0, 6)
-
--- Tombol Copy to Clipboard
-local copyAnalyzerBtn = makeStyledButton(secAI, "📋 Copy Report ke Clipboard", Color3.fromRGB(80, 180, 80))
-copyAnalyzerBtn.MouseButton1Click:Connect(function()
-    if analyzerState.fullReport == "" then
-        analyzerStatusLabel.Text = "❌ Belum ada data. Klik Scan dulu."
-        return
-    end
-    pcall(function()
-        if setclipboard then
-            setclipboard(analyzerState.fullReport)
-            analyzerStatusLabel.Text = "✅ Laporan berhasil disalin ke clipboard!"
-        else
-            -- Fallback: tampilkan di console & instruksi manual
-            print("=== COPY START ===")
-            print(analyzerState.fullReport)
-            print("=== COPY END ===")
-            analyzerStatusLabel.Text = "📋 Buka Console (F9), lalu pilih teks & copy."
-        end
-    end)
-end)
-
--- Tombol Clear
-local clearAnalyzerBtn = makeButton(secAI, "🗑️ Clear", Color3.fromRGB(100, 100, 100))
-clearAnalyzerBtn.MouseButton1Click:Connect(function()
-    analyzerState.fullReport = ""
-    analyzerOutputBox.Text = ""
-    analyzerStatusLabel.Text = "Status: Siap"
-end)
-
--- =============== SHARED UTILITY ===============
-local function roundPos(pos, snap)
-    snap = snap or 10
-    return string.format("%d_%d", math.floor(pos.X/snap)*snap, math.floor(pos.Z/snap)*snap)
-end
-
-local function makeProgressBar(parent, width)
-    local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(1, 0, 0, 10)
-    frame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-    frame.BorderSizePixel = 0
-    frame.Parent = parent
-
-    local fill = Instance.new("Frame")
-    fill.Size = UDim2.new(0, 0, 1, 0)
-    fill.BackgroundColor3 = Color3.fromRGB(80, 200, 120)
-    fill.BorderSizePixel = 0
-    fill.Parent = frame
-
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(1, 0)
-    corner.Parent = frame
-
-    local corner2 = Instance.new("UICorner")
-    corner2.CornerRadius = UDim.new(1, 0)
-    corner2.Parent = fill
-
-    return {
-        frame = frame,
-        fill = fill,
-        set = function(pct) -- 0.0 to 1.0
-            fill.Size = UDim2.new(math.clamp(pct, 0, 1), 0, 1, 0)
-        end
-    }
-end
-
-local function generateRingPoints(startPos, ring, step, noise, visited)
-    local points = {}
-    local r = ring * step
-
-    -- Iterasi lebih efisien: hanya tepi ring
-    local function tryAdd(x, z)
-        local target = startPos + Vector3.new(x, 0, z)
-        if noise then
-            target = target + Vector3.new(math.random(-5, 5), 0, math.random(-5, 5))
-        end
-        local key = roundPos(target)
-        if not visited[key] then
-            visited[key] = true
-            table.insert(points, target)
-        end
-    end
-
-    -- Sisi atas & bawah
-    for x = -r, r, step do
-        tryAdd(x,  r)
-        tryAdd(x, -r)
-    end
-    -- Sisi kiri & kanan (hindari duplikat sudut)
-    for z = -r + step, r - step, step do
-        tryAdd( r, z)
-        tryAdd(-r, z)
-    end
-
-    return points
-end
-
--- =============== UNLOCK MAP (SMART SPREAD) ===============
-makeLabel(secAI, "━━━━━━ 🗺️ UNLOCK MAP (SMART SPREAD) ━━━━━━")
-
-local mapState = {
-    running  = false,
-    visited  = {},
-    stepSize = 60,
-    waitTime = 0.3,
-    maxRadius = 500,
-}
-
-local mapStatusLabel   = makeLabel(secAI, "Status: Idle")
-mapStatusLabel.TextColor3 = Color3.fromRGB(160, 200, 255)
-
-makeSlider(secAI, "Langkah (stud)", 30, 200, mapState.stepSize, function(v) mapState.stepSize = v end)
-makeSlider(secAI, "Jeda (detik)",   0.1, 2,  mapState.waitTime, function(v) mapState.waitTime = v end)
-makeSlider(secAI, "Radius Maks",    100, 2000, mapState.maxRadius, function(v) mapState.maxRadius = v end)
-
-local mapProgressLabel = makeLabel(secAI, "Progress: 0 titik dikunjungi")
-mapProgressLabel.TextColor3 = Color3.fromRGB(140, 220, 140)
-
-local mapBar = makeProgressBar(secAI)
-
-local mapStartBtn = makeStyledButton(secAI, "▶ START UNLOCK MAP", Color3.fromRGB(80, 180, 200))
-local mapStopBtn  = makeButton(secAI, "⏹ STOP", Color3.fromRGB(200, 80, 80))
-mapStopBtn.Visible = false
-
-mapStartBtn.MouseButton1Click:Connect(function()
-    if mapState.running then return end
-
-    local root = character and character:FindFirstChild("HumanoidRootPart")
-    if not root then
-        mapStatusLabel.Text = "❌ Karakter tidak ditemukan"
-        return
-    end
-
-    mapState.running = true
-    mapState.visited = {}
-    local startPos = root.Position
-    mapState.visited[roundPos(startPos)] = true
-
-    mapStartBtn.Text = "⏸ RUNNING..."
-    mapStopBtn.Visible = true
-    mapStatusLabel.Text = "⚡ Menyebar..."
-    mapBar.set(0)
-
-    task.spawn(function()
-        local step      = mapState.stepSize
-        local waitTime  = mapState.waitTime
-        local maxR      = mapState.maxRadius
-        local maxRings  = math.floor(maxR / step)
-        local ring      = 1
-        local total     = 1
-        local startTime = os.clock()
-
-        while mapState.running and ring <= maxRings do
-            local points = generateRingPoints(startPos, ring, step, false, mapState.visited)
-
-            for i, target in ipairs(points) do
-                if not mapState.running then break end
-
-                root.CFrame = CFrame.new(target + Vector3.new(0, 3.5, 0))
-                total = total + 1
-
-                -- ETA
-                local elapsed  = os.clock() - startTime
-                local pct      = ring / maxRings
-                local eta      = pct > 0.01 and string.format("ETA: %.0fs", elapsed / pct * (1 - pct)) or "menghitung..."
-
-                mapProgressLabel.Text = string.format("Ring %d/%d | %d titik | %s", ring, maxRings, total, eta)
-                mapBar.set(pct)
-                mapStatusLabel.Text = string.format("📍 (%d/%d di ring ini)", i, #points)
-
-                task.wait(waitTime)
-            end
-
-            ring = ring + 1
-        end
-
-        mapState.running = false
-        mapStartBtn.Text = "▶ START UNLOCK MAP"
-        mapStopBtn.Visible = false
-        mapBar.set(1)
-        mapStatusLabel.Text = string.format("✅ Selesai! %d titik dalam %.1fs", total, os.clock() - startTime)
-    end)
-end)
-
-mapStopBtn.MouseButton1Click:Connect(function()
-    mapState.running  = false
-    mapStartBtn.Text  = "▶ START UNLOCK MAP"
-    mapStopBtn.Visible = false
-    mapStatusLabel.Text = "⛔ Dihentikan"
-end)
-
-makeLabel(secAI, "💡 Tips: Langkah kecil = lebih rapat tapi lebih lama.")
-
-
--- =============== UNLOCK MAP (TURBO + BYPASS) ===============
-makeLabel(secAI, "━━━━━━ 🗺️ UNLOCK MAP (TURBO + BYPASS) ━━━━━━")
-
-local turboState = {
-    running   = false,
-    visited   = {},
-    stepSize  = 100,
-    waitTime  = 0.05,
-    maxRadius = 2000,
-    noise     = true,
-    antiAFK   = true,
-    walkSim   = true,
-}
-
-local turboStatusLabel = makeLabel(secAI, "Status: Idle")
-turboStatusLabel.TextColor3 = Color3.fromRGB(255, 220, 100)
-
-makeSlider(secAI, "[T] Langkah (stud)", 50, 500,   turboState.stepSize,  function(v) turboState.stepSize  = v end)
-makeSlider(secAI, "[T] Jeda (detik)",   0,  0.5,   turboState.waitTime,  function(v) turboState.waitTime  = v end)
-makeSlider(secAI, "[T] Radius Maks",    500, 10000, turboState.maxRadius, function(v) turboState.maxRadius = v end)
-
--- Toggle helpers
-local function makeToggle(parent, label, state, key)
-    local btn = makeButton(parent, label .. ": ON", Color3.fromRGB(60, 160, 100))
-    btn.MouseButton1Click:Connect(function()
-        state[key] = not state[key]
-        btn.Text = label .. (state[key] and ": ON" or ": OFF")
-        btn.BackgroundColor3 = state[key] and Color3.fromRGB(60,160,100) or Color3.fromRGB(140,60,60)
-    end)
-    return btn
-end
-
-makeToggle(secAI, "Noise",          turboState, "noise")
-makeToggle(secAI, "Anti-AFK",       turboState, "antiAFK")
-makeToggle(secAI, "Simulasi Jalan", turboState, "walkSim")
-
-local turboProgressLabel = makeLabel(secAI, "Progress: 0 titik")
-turboProgressLabel.TextColor3 = Color3.fromRGB(140, 220, 140)
-
-local turboBar = makeProgressBar(secAI)
-turboBar.fill.BackgroundColor3 = Color3.fromRGB(255, 160, 40)
-
-local turboStartBtn = makeStyledButton(secAI, "▶ START TURBO UNLOCK", Color3.fromRGB(255, 140, 30))
-local turboStopBtn  = makeButton(secAI, "⏹ STOP", Color3.fromRGB(200, 80, 80))
-turboStopBtn.Visible = false
-
-turboStartBtn.MouseButton1Click:Connect(function()
-    if turboState.running then return end
-
-    local root = character and character:FindFirstChild("HumanoidRootPart")
-    if not root then
-        turboStatusLabel.Text = "❌ Karakter tidak ditemukan"
-        return
-    end
-
-    turboState.running = true
-    turboState.visited = {}
-    local startPos = root.Position
-    turboState.visited[roundPos(startPos)] = true
-
-    turboStartBtn.Text = "⏸ TURBO RUNNING..."
-    turboStopBtn.Visible = true
-    turboStatusLabel.Text = "⚡ Turbo menyebar..."
-    turboBar.set(0)
-
-    task.spawn(function()
-        local step      = turboState.stepSize
-        local waitTime  = turboState.waitTime
-        local maxR      = turboState.maxRadius
-        local maxRings  = math.floor(maxR / step)
-        local ring      = 1
-        local total     = 1
-        local startTime = os.clock()
-
-        -- Anti-AFK loop (disimpan agar bisa di-cancel)
-        local afkConn
-        if turboState.antiAFK then
-            afkConn = task.spawn(function()
-                while turboState.running do
-                    task.wait(4 + math.random())
-                    pcall(function()
-                        if humanoid then
-                            humanoid:ChangeState(Enum.HumanoidStateType.Running)
-                        end
-                    end)
-                end
-            end)
-        end
-
-        while turboState.running and ring <= maxRings do
-            local points = generateRingPoints(startPos, ring, step, turboState.noise, turboState.visited)
-
-            for i, target in ipairs(points) do
-                if not turboState.running then break end
-
-                root.CFrame = CFrame.new(target + Vector3.new(0, 3.5, 0))
-                total = total + 1
-
-                -- Simulasi jalan kecil (bypass anti-cheat)
-                if turboState.walkSim and humanoid then
-                    local dir = (target - root.Position)
-                    if dir.Magnitude > 0 then
-                        humanoid:MoveTo(root.Position + dir.Unit * 2)
-                    end
-                    task.wait(0.04)
-                    humanoid:Move(Vector3.new(0, 0, 0), true)
-                end
-
-                local pct = ring / maxRings
-                local elapsed = os.clock() - startTime
-                local eta = pct > 0.01 and string.format("ETA: %.0fs", elapsed / pct * (1 - pct)) or "menghitung..."
-
-                turboProgressLabel.Text = string.format("Ring %d/%d | %d titik | %s", ring, maxRings, total, eta)
-                turboBar.set(pct)
-                turboStatusLabel.Text = string.format("📍 (%d/%d di ring ini)", i, #points)
-
-                if waitTime > 0.001 then
-                    task.wait(waitTime)
-                else
-                    task.wait()
-                end
-            end
-
-            ring = ring + 1
-        end
-
-        -- Cleanup
-        turboState.running = false
-        if afkConn then task.cancel(afkConn) end
-
-        turboStartBtn.Text = "▶ START TURBO UNLOCK"
-        turboStopBtn.Visible = false
-        turboBar.set(1)
-        turboStatusLabel.Text = string.format("✅ Selesai! %d titik dalam %.1fs", total, os.clock() - startTime)
-    end)
-end)
-
-turboStopBtn.MouseButton1Click:Connect(function()
-    turboState.running  = false
-    turboStartBtn.Text  = "▶ START TURBO UNLOCK"
-    turboStopBtn.Visible = false
-    turboStatusLabel.Text = "⛔ Dihentikan"
-end)
-
-makeLabel(secAI, "💡 Tips: Radius hingga 10k stud, jeda 0 = 1 frame per TP.\n   Noise & Anti-AFK aktif untuk hindari deteksi.")
 
 -- =============== DEVELOPER ===============
 local execContainer = Instance.new("Frame", secDeveloper)
@@ -2553,8 +1482,10 @@ end)
 player.CharacterAdded:Connect(function(newChar)
 	character = newChar
 	humanoid  = newChar:WaitForChild("Humanoid")
+	-- Restore persistent states on respawn
 	setNoclipConnection()
 	setFlyConnection()
+	-- Restore walk speed & jump
 	humanoid.WalkSpeed    = state.speed
 	humanoid.UseJumpPower = true
 	humanoid.JumpPower    = state.jump
