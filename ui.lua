@@ -265,5 +265,3 @@ tabs["Movement"].btn.TextColor3 = Color3.new(1,1,1)
 tabs["Movement"].frame.Visible = true
 
 notify("V3 Loaded Successfully")
-
-Dek Anda mengenai fitur V3 siap dilihat! Saya telah memisahkan logic Movement dan Utility agar Anda bisa menambahkan fitur sebanyak mungkin tanpa batas.
