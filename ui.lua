@@ -1,292 +1,482 @@
--- StarterPlayerScripts / DevTools_Ultimate_Glass.lua
--- Ultimate Redesign: Glassmorphism & Modern Sidebar
--- Version 2.0 (Stable & Optimized)
+-- StarterPlayerScripts / DevTools_ClientUltimateEnhanced.lua
+-- Ultimate Client Dev Tools with Advanced Features & AI
+-- UI Updated & Performance Optimized Version
 
 local Players = game:GetService("Players")
 local UIS = game:GetService("UserInputService")
 local RS = game:GetService("RunService")
 local Lighting = game:GetService("Lighting")
 local Debris = game:GetService("Debris")
-local TweenService = game:GetService("TweenService")
-
-local player = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
--- Config & Colors
-local THEME = {
-    Bg = Color3.fromRGB(11, 14, 17),
-    Accent = Color3.fromRGB(0, 229, 255),
-    Sidebar = Color3.fromRGB(16, 20, 24),
-    Text = Color3.fromRGB(225, 232, 240),
-    TextDim = Color3.fromRGB(140, 150, 160)
-}
+local player = Players.LocalPlayer
 
--- State Management
+-- Mengambil karakter dan humanoid secara aman tanpa yield/stuck
+local function getCharHum()
+    local c = player.Character
+    if c then
+        local h = c:FindFirstChild("Humanoid")
+        return c, h
+    end
+    return nil, nil
+end
+
+-- =============== STATE ===============
 local state = {
-    speed = 16, jump = 50, noclip = false, infiniteJump = false,
-    esp = false, nightVision = false, fov = 70, clockTime = 12
+    speed = 16, jump = 50, noclip = false, fly = false, infiniteJump = false,
+    flyMult = 2, esp = false, rainbow = false, nightVision = false, fov = 70,
+    gravity = workspace.Gravity, clockTime = Lighting.ClockTime or 12,
+    reduceLag = false, antiAFK = false, xray = false
 }
 
 local backup = {
     Brightness = Lighting.Brightness, Ambient = Lighting.Ambient,
-    OutdoorAmbient = Lighting.OutdoorAmbient, GlobalShadows = Lighting.GlobalShadows
+    OutdoorAmbient = Lighting.OutdoorAmbient, FogEnd = Lighting.FogEnd,
+    GlobalShadows = Lighting.GlobalShadows, Technology = Lighting.Technology
 }
 
--- Helpers
-local function getCharHum()
-    local char = player.Character
-    return char, (char and char:FindFirstChildOfClass("Humanoid"))
-end
-
-local function createTween(obj, info, goal)
-    local t = TweenService:Create(obj, TweenInfo.new(info), goal)
-    t:Play()
-    return t
-end
-
--- =============== UI CONSTRUCTION ===============
+-- =============== UI FACTORY ===============
 local gui = Instance.new("ScreenGui")
-gui.Name = "GlassDevTools"
+gui.Name = "ClientDevToolsEnhanced"
 gui.ResetOnSpawn = false
+gui.IgnoreGuiInset = true
 gui.Parent = player:WaitForChild("PlayerGui")
 
--- Main Container
-local main = Instance.new("Frame")
-main.Name = "Main"
-main.Size = UDim2.new(0, 600, 0, 400)
-main.Position = UDim2.new(0.5, -300, 0.5, -200)
-main.BackgroundColor3 = THEME.Bg
-main.BackgroundTransparency = 0.15
-main.Visible = false
-main.Parent = gui
-
-Instance.new("UICorner", main).CornerRadius = UDim.new(0, 16)
-local stroke = Instance.new("UIStroke", main)
-stroke.Color = THEME.Accent
-stroke.Thickness = 1.2
-stroke.Transparency = 0.5
-
--- Sidebar
-local sidebar = Instance.new("Frame")
-sidebar.Size = UDim2.new(0, 160, 1, 0)
-sidebar.BackgroundColor3 = THEME.Sidebar
-sidebar.BackgroundTransparency = 0.1
-sidebar.Parent = main
-Instance.new("UICorner", sidebar).CornerRadius = UDim.new(0, 16)
-
-local sideTitle = Instance.new("TextLabel")
-sideTitle.Size = UDim2.new(1, 0, 0, 50)
-sideTitle.Text = "DEVTOOLS"
-sideTitle.TextColor3 = THEME.Accent
-sideTitle.Font = Enum.Font.GothamBold
-sideTitle.TextSize = 18
-sideTitle.BackgroundTransparency = 1
-sideTitle.Parent = sidebar
-
-local tabList = Instance.new("UIListLayout", sidebar)
-tabList.Padding = UDim.new(0, 5)
-tabList.HorizontalAlignment = Enum.HorizontalAlignment.Center
-
--- Content Container
-local content = Instance.new("Frame")
-content.Position = UDim2.new(0, 170, 0, 15)
-content.Size = UDim2.new(1, -185, 1, -30)
-content.BackgroundTransparency = 1
-content.Parent = main
-
--- Toggle Switch Logic
+-- Toggle Button
 local toggleBtn = Instance.new("TextButton")
-toggleBtn.Size = UDim2.new(0, 45, 0, 45)
-toggleBtn.Position = UDim2.new(1, -60, 0, 20)
-toggleBtn.BackgroundColor3 = THEME.Bg
-toggleBtn.Text = "🛠"
-toggleBtn.TextColor3 = THEME.Accent
+toggleBtn.Size = UDim2.new(0, 56, 0, 40)
+toggleBtn.Position = UDim2.new(1, -70, 0.5, 0)
+toggleBtn.BackgroundColor3 = Color3.fromRGB(45,45,45)
+toggleBtn.Text = "🛠️"
+toggleBtn.TextColor3 = Color3.new(1,1,1)
 toggleBtn.TextSize = 22
 toggleBtn.Font = Enum.Font.GothamBold
 toggleBtn.Parent = gui
-Instance.new("UICorner", toggleBtn).CornerRadius = UDim.new(0, 12)
+Instance.new("UICorner", toggleBtn).CornerRadius = UDim.new(0, 8)
 
-toggleBtn.MouseButton1Click:Connect(function()
-    main.Visible = not main.Visible
-end)
+-- Main Frame
+local main = Instance.new("Frame")
+main.Size = UDim2.new(0, 520, 0, 420)
+main.Position = UDim2.new(0.5, -260, 0.5, -210)
+main.BackgroundColor3 = Color3.fromRGB(24,24,28)
+main.BorderSizePixel = 0
+main.Visible = false
+main.Active = true
+main.Parent = gui
 
--- Tab Builder
-local sections = {}
-local function makeSection(name, icon)
-    local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(0.85, 0, 0, 35)
-    btn.BackgroundColor3 = THEME.Accent
-    btn.BackgroundTransparency = 1
-    btn.Text = " " .. icon .. "  " .. name
-    btn.TextColor3 = THEME.TextDim
-    btn.Font = Enum.Font.GothamMedium
-    btn.TextSize = 13
-    btn.TextXAlignment = Enum.TextXAlignment.Left
-    btn.Parent = sidebar
-    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
+Instance.new("UICorner", main).CornerRadius = UDim.new(0, 12)
 
-    local secFrame = Instance.new("ScrollingFrame")
-    secFrame.Size = UDim2.new(1, 0, 1, 0)
-    secFrame.BackgroundTransparency = 1
-    secFrame.BorderSizePixel = 0
-    secFrame.ScrollBarThickness = 2
-    secFrame.Visible = false
-    secFrame.Parent = content
+local stroke = Instance.new("UIStroke", main)
+stroke.Color = Color3.fromRGB(60,60,70)
+stroke.Thickness = 1
+
+local padding = Instance.new("UIPadding", main)
+padding.PaddingTop = UDim.new(0, 12)
+padding.PaddingBottom = UDim.new(0, 12)
+padding.PaddingLeft = UDim.new(0, 12)
+padding.PaddingRight = UDim.new(0, 12)
+
+-- Manual Draggable logic
+do
+    local function makeDraggable(guiObject)
+        local dragging, dragStart, startPos
+        guiObject.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                dragging = true
+                dragStart = input.Position
+                startPos = guiObject.Position
+                input.Changed:Connect(function()
+                    if input.UserInputState == Enum.UserInputState.End then dragging = false end
+                end)
+            end
+        end)
+        UIS.InputChanged:Connect(function(input)
+            if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+                local delta = input.Position - dragStart
+                guiObject.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+            end
+        end)
+    end
     
-    local layout = Instance.new("UIListLayout", secFrame)
-    layout.Padding = UDim.new(0, 10)
-    
-    sections[name] = secFrame
-    
-    btn.MouseButton1Click:Connect(function()
-        for _, s in pairs(sections) do s.Visible = false end
-        for _, b in ipairs(sidebar:GetChildren()) do 
-            if b:IsA("TextButton") then b.TextColor3 = THEME.TextDim b.BackgroundTransparency = 1 end 
-        end
-        secFrame.Visible = true
-        btn.TextColor3 = Color3.new(1,1,1)
-        btn.BackgroundTransparency = 0.8
-    end)
-    
-    return secFrame
+    makeDraggable(main)
+    makeDraggable(toggleBtn)
 end
 
--- Component Builders
-local function makeButton(parent, text, callback)
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, -44, 0, 28)
+title.BackgroundTransparency = 1
+title.Text = "Ultimate AI Dev Tools"
+title.TextColor3 = Color3.fromRGB(255,255,255)
+title.Font = Enum.Font.GothamBold
+title.TextSize = 18
+title.TextXAlignment = Enum.TextXAlignment.Left
+title.Parent = main
+
+local close = Instance.new("TextButton")
+close.Size = UDim2.new(0, 32, 0, 32)
+close.Position = UDim2.new(1, -32, 0, -4)
+close.BackgroundColor3 = Color3.fromRGB(220, 80, 80)
+close.Text = "×"
+close.TextColor3 = Color3.new(1,1,1)
+close.Font = Enum.Font.GothamBold
+close.TextSize = 18
+close.Parent = main
+Instance.new("UICorner", close).CornerRadius = UDim.new(0, 8)
+
+close.MouseButton1Click:Connect(function() main.Visible = false end)
+toggleBtn.MouseButton1Click:Connect(function() main.Visible = not main.Visible end)
+
+local tabBar = Instance.new("Frame")
+tabBar.Size = UDim2.new(1, 0, 0, 38)
+tabBar.Position = UDim2.new(0, 0, 0, 32)
+tabBar.BackgroundColor3 = Color3.fromRGB(32,32,38)
+tabBar.BorderSizePixel = 0
+tabBar.Parent = main
+Instance.new("UICorner", tabBar).CornerRadius = UDim.new(0, 10)
+
+local tabScroller = Instance.new("ScrollingFrame")
+tabScroller.Size = UDim2.new(1, 0, 1, 0)
+tabScroller.BackgroundTransparency = 1
+tabScroller.BorderSizePixel = 0
+tabScroller.ScrollBarThickness = 0
+tabScroller.Parent = tabBar
+
+local tabPad = Instance.new("UIPadding", tabScroller)
+tabPad.PaddingLeft = UDim.new(0, 8)
+tabPad.PaddingRight = UDim.new(0, 8)
+
+local tabLayout = Instance.new("UIListLayout", tabScroller)
+tabLayout.FillDirection = Enum.FillDirection.Horizontal
+tabLayout.SortOrder = Enum.SortOrder.LayoutOrder
+tabLayout.Padding = UDim.new(0, 6)
+tabLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+
+tabLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    tabScroller.CanvasSize = UDim2.new(0, tabLayout.AbsoluteContentSize.X + 16, 0, 0)
+end)
+
+local content = Instance.new("Frame")
+content.Size = UDim2.new(1, 0, 1, -82)
+content.Position = UDim2.new(0, 0, 0, 82)
+content.BackgroundTransparency = 1
+content.Parent = main
+
+local function makeTab(name)
     local b = Instance.new("TextButton")
-    b.Size = UDim2.new(1, -10, 0, 35)
-    b.BackgroundColor3 = THEME.Accent
-    b.BackgroundTransparency = 0.85
-    b.Text = text
-    b.TextColor3 = THEME.Text
-    b.Font = Enum.Font.Gotham
-    b.TextSize = 14
-    b.Parent = parent
+    b.Size = UDim2.new(0, 80, 0, 28)
+    b.BackgroundColor3 = Color3.fromRGB(46,46,54)
+    b.Text = name
+    b.TextColor3 = Color3.fromRGB(235,235,235)
+    b.Font = Enum.Font.GothamSemibold
+    b.TextSize = 11
+    b.BorderSizePixel = 0
+    b.Parent = tabScroller
     Instance.new("UICorner", b).CornerRadius = UDim.new(0, 8)
-    
-    b.MouseEnter:Connect(function() createTween(b, 0.2, {BackgroundTransparency = 0.7}) end)
-    b.MouseLeave:Connect(function() createTween(b, 0.2, {BackgroundTransparency = 0.85}) end)
-    b.MouseButton1Click:Connect(callback)
     return b
 end
 
-local function makeSlider(parent, text, min, max, def, callback)
+local function makeSection()
+    local s = Instance.new("ScrollingFrame")
+    s.Size = UDim2.new(1, 0, 1, 0)
+    s.BackgroundTransparency = 1
+    s.BorderSizePixel = 0
+    s.ScrollBarThickness = 4
+    s.ScrollBarImageColor3 = Color3.fromRGB(80,80,90)
+    s.Visible = false
+    s.CanvasSize = UDim2.new(0,0,0,0)
+    s.Parent = content
+
+    local pad = Instance.new("UIPadding", s)
+    pad.PaddingRight = UDim.new(0, 4)
+
+    local layout = Instance.new("UIListLayout", s)
+    layout.Padding = UDim.new(0, 8)
+    layout.SortOrder = Enum.SortOrder.LayoutOrder
+    layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        s.CanvasSize = UDim2.new(0, 0, 0, layout.AbsoluteContentSize.Y + 12)
+    end)
+
+    return s
+end
+
+local function makeButton(parent, text, color)
+    local b = Instance.new("TextButton")
+    b.Size = UDim2.new(1, 0, 0, 36)
+    b.BackgroundColor3 = color or Color3.fromRGB(54,54,62)
+    b.Text = text
+    b.TextColor3 = Color3.fromRGB(255,255,255)
+    b.Font = Enum.Font.Gotham
+    b.TextSize = 14
+    b.BorderSizePixel = 0
+    b.Parent = parent
+    Instance.new("UICorner", b).CornerRadius = UDim.new(0, 8)
+
+    local st = Instance.new("UIStroke", b)
+    st.Color = Color3.fromRGB(75,75,85)
+    st.Thickness = 1
+
+    return b
+end
+
+local function makeSlider(parent, labelText, min, max, default, onChange)
     local holder = Instance.new("Frame")
-    holder.Size = UDim2.new(1, -10, 0, 50)
+    holder.Size = UDim2.new(1, 0, 0, 54)
     holder.BackgroundTransparency = 1
     holder.Parent = parent
-    
+
     local label = Instance.new("TextLabel")
     label.Size = UDim2.new(1, 0, 0, 20)
-    label.Text = text .. " (" .. def .. ")"
-    label.TextColor3 = THEME.TextDim
+    label.BackgroundTransparency = 1
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.TextColor3 = Color3.fromRGB(220,220,220)
     label.Font = Enum.Font.Gotham
     label.TextSize = 12
-    label.TextXAlignment = Enum.TextXAlignment.Left
-    label.BackgroundTransparency = 1
+    label.Text = labelText .. " (" .. default .. ")"
     label.Parent = holder
-    
-    local bar = Instance.new("Frame")
-    bar.Size = UDim2.new(1, 0, 0, 6)
-    bar.Position = UDim2.new(0, 0, 0, 30)
-    bar.BackgroundColor3 = Color3.new(0.2, 0.2, 0.2)
-    bar.Parent = holder
-    Instance.new("UICorner", bar)
-    
-    local fill = Instance.new("Frame")
-    fill.Size = UDim2.new((def - min)/(max - min), 0, 1, 0)
-    fill.BackgroundColor3 = THEME.Accent
-    fill.Parent = bar
-    Instance.new("UICorner", fill)
 
-    local function update(input)
-        local pos = math.clamp((input.Position.X - bar.AbsolutePosition.X) / bar.AbsoluteSize.X, 0, 1)
-        local val = math.floor(min + (max - min) * pos)
-        fill.Size = UDim2.new(pos, 0, 1, 0)
-        label.Text = text .. " (" .. val .. ")"
-        callback(val)
+    local bar = Instance.new("Frame")
+    bar.Size = UDim2.new(1, 0, 0, 18)
+    bar.Position = UDim2.new(0, 0, 0, 28)
+    bar.BackgroundColor3 = Color3.fromRGB(42,42,48)
+    bar.BorderSizePixel = 0
+    bar.Parent = holder
+    Instance.new("UICorner", bar).CornerRadius = UDim.new(0, 8)
+
+    local fill = Instance.new("Frame")
+    fill.Size = UDim2.new((default - min) / (max - min), 0, 1, 0)
+    fill.BackgroundColor3 = Color3.fromRGB(90, 130, 255)
+    fill.BorderSizePixel = 0
+    fill.Parent = bar
+    Instance.new("UICorner", fill).CornerRadius = UDim.new(0, 8)
+
+    local dragging = false
+    local function setValue(x)
+        local rel = math.clamp((x - bar.AbsolutePosition.X) / bar.AbsoluteSize.X, 0, 1)
+        local val = math.floor(min + (max - min) * rel + 0.5)
+        fill.Size = UDim2.new(rel, 0, 1, 0)
+        label.Text = labelText .. " (" .. val .. ")"
+        if onChange then onChange(val) end
     end
 
     bar.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            local connection
-            connection = UIS.InputChanged:Connect(function(input)
-                if input.UserInputType == Enum.UserInputType.MouseMovement then update(input) end
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            setValue(input.Position.X)
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then dragging = false end
             end)
-            UIS.InputEnded:Connect(function(input)
-                if input.UserInputType == Enum.UserInputType.MouseButton1 then connection:Disconnect() end
-            end)
-            update(input)
         end
     end)
+
+    UIS.InputChanged:Connect(function(input)
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            setValue(input.Position.X)
+        end
+    end)
+
+    if onChange then onChange(default) end
 end
 
--- =============== FILLING TABS ===============
-local moveTab = makeSection("Move", "🚀")
-local visTab  = makeSection("Vis", "👁")
-local worldTab = makeSection("World", "🌍")
+-- =============== TABS SETUP ===============
+local tabMovement   = makeTab("Movement")
+local tabVisual     = makeTab("Visual")
+local tabWorld      = makeTab("World")
+local tabUtility    = makeTab("Utility")
 
--- MOVEMENT
-makeSlider(moveTab, "Speed", 16, 250, state.speed, function(v)
+local secMove  = makeSection()
+local secVis   = makeSection()
+local secWorld = makeSection()
+local secUtil  = makeSection()
+
+local function showSection(sec)
+    for _, child in ipairs(content:GetChildren()) do
+        if child:IsA("ScrollingFrame") then 
+            child.Visible = (child == sec)
+        end
+    end
+    
+    for _, b in ipairs(tabScroller:GetChildren()) do
+        if b:IsA("TextButton") then b.BackgroundColor3 = Color3.fromRGB(46,46,54) end
+    end
+    
+    local activeColor = Color3.fromRGB(90, 130, 255)
+    if sec == secMove then tabMovement.BackgroundColor3 = activeColor
+    elseif sec == secVis then tabVisual.BackgroundColor3 = activeColor
+    elseif sec == secWorld then tabWorld.BackgroundColor3 = activeColor
+    elseif sec == secUtil then tabUtility.BackgroundColor3 = activeColor
+    end
+end
+
+tabMovement.MouseButton1Click:Connect(function() showSection(secMove) end)
+tabVisual.MouseButton1Click:Connect(function() showSection(secVis) end)
+tabWorld.MouseButton1Click:Connect(function() showSection(secWorld) end)
+tabUtility.MouseButton1Click:Connect(function() showSection(secUtil) end)
+
+showSection(secMove)
+
+-- =============== 1. MOVEMENT ===============
+makeSlider(secMove, "Walk Speed", 16, 300, state.speed, function(v)
     state.speed = v
     local _, hum = getCharHum()
     if hum then hum.WalkSpeed = v end
 end)
 
-makeButton(moveTab, "Noclip: OFF", function(b)
+makeSlider(secMove, "Jump Power", 50, 200, state.jump, function(v)
+    state.jump = v
+    local _, hum = getCharHum()
+    if hum then hum.UseJumpPower = true; hum.JumpPower = v end
+end)
+
+local btnNoclip = makeButton(secMove, "Noclip: OFF")
+btnNoclip.MouseButton1Click:Connect(function()
     state.noclip = not state.noclip
-    b.Text = "Noclip: " .. (state.noclip and "ON ✅" or "OFF")
+    btnNoclip.Text = state.noclip and "Noclip: ON ✅" or "Noclip: OFF ❌"
 end)
 
--- VISUALS
-makeButton(visTab, "Night Vision: OFF", function(b)
-    state.nightVision = not state.nightVision
-    b.Text = "Night Vision: " .. (state.nightVision and "ON 🌙" or "OFF")
-    if state.nightVision then
-        Lighting.Brightness = 3
-        Lighting.Ambient = Color3.fromRGB(150, 150, 150)
-    else
-        Lighting.Brightness = backup.Brightness
-        Lighting.Ambient = backup.Ambient
-    end
-end)
-
--- WORLD
-makeSlider(worldTab, "Clock Time", 0, 24, state.clockTime, function(v)
-    Lighting.ClockTime = v
-end)
-
--- LOOPS
+-- Optimasi Noclip: Hanya GetChildren (Bagian Utama) bukan GetDescendants
 RS.Stepped:Connect(function()
     if state.noclip then
         local char = player.Character
         if char then
-            for _, p in ipairs(char:GetChildren()) do
-                if p:IsA("BasePart") then p.CanCollide = false end
+            for _, part in ipairs(char:GetChildren()) do
+                if part:IsA("BasePart") and part.CanCollide then
+                    part.CanCollide = false
+                end
             end
         end
     end
 end)
 
--- Initial Selection
-sections["Move"].Visible = true
-sidebar:FindFirstChildOfClass("TextButton").TextColor3 = Color3.new(1,1,1)
-
--- Drag Logic
-local dragging, dragInput, dragStart, startPos
-main.InputBegan:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton1 then
-		dragging = true dragStart = input.Position startPos = main.Position
-		input.Changed:Connect(function()
-			if input.UserInputState == Enum.UserInputState.End then dragging = false end
-		end)
-	end
-end)
-UIS.InputChanged:Connect(function(input)
-	if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-		local delta = input.Position - dragStart
-		main.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-	end
+local btnInf = makeButton(secMove, "Infinite Jump: OFF")
+btnInf.MouseButton1Click:Connect(function()
+    state.infiniteJump = not state.infiniteJump
+    btnInf.Text = state.infiniteJump and "Infinite Jump: ON 🦘" or "Infinite Jump: OFF"
 end)
 
-Dek Anda mengenai evolusi visual DevTools siap untuk dipresentasikan! Kabari saya jika ada fitur spesifik lain yang ingin Anda tambahkan ke desainnya.
+UIS.JumpRequest:Connect(function()
+    if state.infiniteJump then
+        local _, hum = getCharHum()
+        if hum then hum:ChangeState(Enum.HumanoidStateType.Jumping) end
+    end
+end)
+
+-- =============== 2. VISUAL ===============
+local espFolder = Instance.new("Folder")
+espFolder.Name = "ESP_Local"
+espFolder.Parent = gui
+
+local function clearESP()
+    for _, k in ipairs(espFolder:GetChildren()) do k:Destroy() end
+end
+
+local function refreshESP()
+    clearESP()
+    if not state.esp then return end
+    for _, p in ipairs(Players:GetPlayers()) do 
+        if p ~= player and p.Character then
+            local h = Instance.new("Highlight")
+            h.Name = p.Name
+            h.FillTransparency = 1
+            h.OutlineTransparency = 0
+            h.OutlineColor = Color3.fromRGB(90, 130, 255)
+            h.Adornee = p.Character
+            h.Parent = espFolder
+        end
+    end
+end
+
+-- ESP Dinamis agar update saat ada player masuk/respawn
+local function setupPlayerESP(p)
+    if p ~= player then
+        p.CharacterAdded:Connect(function()
+            if state.esp then task.wait(0.5) refreshESP() end
+        end)
+    end
+end
+
+Players.PlayerAdded:Connect(function(p)
+    setupPlayerESP(p)
+    if state.esp then task.wait(0.5) refreshESP() end
+end)
+
+Players.PlayerRemoving:Connect(function(p)
+    if state.esp then refreshESP() end
+end)
+
+for _, p in ipairs(Players:GetPlayers()) do setupPlayerESP(p) end
+
+local btnESP = makeButton(secVis, "ESP Players: OFF")
+btnESP.MouseButton1Click:Connect(function()
+    state.esp = not state.esp
+    btnESP.Text = state.esp and "ESP Players: ON 👁️" or "ESP Players: OFF"
+    refreshESP()
+end)
+
+makeSlider(secVis, "Camera FOV", 50, 120, state.fov, function(v)
+    state.fov = v
+    Camera.FieldOfView = v
+end)
+
+local btnNV = makeButton(secVis, "Night Vision: OFF")
+btnNV.MouseButton1Click:Connect(function()
+    state.nightVision = not state.nightVision
+    btnNV.Text = state.nightVision and "Night Vision: ON 🌙" or "Night Vision: OFF"
+    if state.nightVision then
+        Lighting.Brightness = 3
+        Lighting.Ambient = Color3.fromRGB(128,128,128)
+        Lighting.OutdoorAmbient = Color3.fromRGB(128,128,128)
+    else
+        Lighting.Brightness = backup.Brightness
+        Lighting.Ambient = backup.Ambient
+        Lighting.OutdoorAmbient = backup.OutdoorAmbient
+    end
+end)
+
+-- =============== 3. WORLD ===============
+makeSlider(secWorld, "Gravity", 0, 196, math.floor(state.gravity + 0.5), function(v)
+    state.gravity = v
+    workspace.Gravity = v
+end)
+
+makeSlider(secWorld, "Time of Day", 0, 24, math.floor(state.clockTime + 0.5), function(v)
+    state.clockTime = v
+    Lighting.ClockTime = v
+end)
+
+local btnReduceLag = makeButton(secWorld, "Reduce Lag: OFF", Color3.fromRGB(80, 160, 80))
+btnReduceLag.MouseButton1Click:Connect(function()
+    state.reduceLag = not state.reduceLag
+    if state.reduceLag then
+        Lighting.GlobalShadows = false
+        -- Menggunakan coroutine & pengecekan agar game tidak freeze/error
+        task.spawn(function()
+            for _, obj in ipairs(workspace:GetDescendants()) do
+                if obj:IsA("BasePart") then 
+                    obj.Material = Enum.Material.SmoothPlastic 
+                elseif obj:IsA("Texture") or obj:IsA("Decal") then 
+                    obj:Destroy() 
+                end
+            end
+        end)
+        btnReduceLag.Text = "Reduce Lag: ON 🚀"
+    else
+        Lighting.GlobalShadows = backup.GlobalShadows
+        btnReduceLag.Text = "Reduce Lag: OFF"
+    end
+end)
+
+-- =============== 4. UTILITY ===============
+local btnSpark = makeButton(secUtil, "✨ Add Sparkles (3s)")
+btnSpark.MouseButton1Click:Connect(function()
+    local char, _ = getCharHum()
+    if char and char:FindFirstChild("HumanoidRootPart") then
+        local s = Instance.new("Sparkles", char.HumanoidRootPart)
+        Debris:AddItem(s, 3)
+    end
+end)
+
+local btnSit = makeButton(secUtil, "Sit / Stand")
+btnSit.MouseButton1Click:Connect(function()
+    local _, hum = getCharHum()
+    if hum then hum.Sit = not hum.Sit end
+end)
