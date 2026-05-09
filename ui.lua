@@ -1,6 +1,6 @@
 -- StarterPlayerScripts / DevTools_ClientUltimateEnhanced.lua
 -- Ultimate Client Dev Tools with Advanced Features & AI
--- UI Updated & Performance Optimized Version + Horizontal Page System
+-- UI Updated & Performance Optimized Version + Horizontal Page System + Extra Tabs
 
 local Players = game:GetService("Players")
 local UIS = game:GetService("UserInputService")
@@ -181,7 +181,7 @@ local function makeSectionWithPages()
     s.Size = UDim2.new(1, 0, 1, 0)
     s.BackgroundTransparency = 1
     s.BorderSizePixel = 0
-    s.ScrollBarThickness = 0          -- kita gunakan geser antar halaman, bukan scroll vertikal untuk kerangka utama
+    s.ScrollBarThickness = 0
     s.CanvasSize = UDim2.new(0,0,0,0)
     s.Visible = false
     s.Parent = content
@@ -278,11 +278,17 @@ local tabMovement   = makeTab("Movement")
 local tabVisual     = makeTab("Visual")
 local tabWorld      = makeTab("World")
 local tabUtility    = makeTab("Utility")
+local tabFarm       = makeTab("Farm")      -- ⭐ Tab baru
+local tabPlayer     = makeTab("Player")    -- ⭐ Tab baru
+local tabTest       = makeTab("Test")      -- ⭐ Tab baru
 
 local secMove  = makeSectionWithPages()
 local secVis   = makeSectionWithPages()
 local secWorld = makeSectionWithPages()
 local secUtil  = makeSectionWithPages()
+local secFarm  = makeSectionWithPages()    -- ⭐
+local secPlayer = makeSectionWithPages()   -- ⭐
+local secTest  = makeSectionWithPages()    -- ⭐
 
 local function showSection(secScroll)
     for _, child in ipairs(content:GetChildren()) do
@@ -300,6 +306,9 @@ local function showSection(secScroll)
     elseif secScroll == secVis.ScrollFrame then tabVisual.BackgroundColor3 = activeColor
     elseif secScroll == secWorld.ScrollFrame then tabWorld.BackgroundColor3 = activeColor
     elseif secScroll == secUtil.ScrollFrame then tabUtility.BackgroundColor3 = activeColor
+    elseif secScroll == secFarm.ScrollFrame then tabFarm.BackgroundColor3 = activeColor
+    elseif secScroll == secPlayer.ScrollFrame then tabPlayer.BackgroundColor3 = activeColor
+    elseif secScroll == secTest.ScrollFrame then tabTest.BackgroundColor3 = activeColor
     end
 end
 
@@ -307,13 +316,16 @@ tabMovement.MouseButton1Click:Connect(function() showSection(secMove.ScrollFrame
 tabVisual.MouseButton1Click:Connect(function() showSection(secVis.ScrollFrame) end)
 tabWorld.MouseButton1Click:Connect(function() showSection(secWorld.ScrollFrame) end)
 tabUtility.MouseButton1Click:Connect(function() showSection(secUtil.ScrollFrame) end)
+tabFarm.MouseButton1Click:Connect(function() showSection(secFarm.ScrollFrame) end)      -- ⭐
+tabPlayer.MouseButton1Click:Connect(function() showSection(secPlayer.ScrollFrame) end)  -- ⭐
+tabTest.MouseButton1Click:Connect(function() showSection(secTest.ScrollFrame) end)      -- ⭐
 
 showSection(secMove.ScrollFrame)
 
 -- =============== HELPER BUAT UI ===============
 local function makeButton(parent, text, color)
     local b = Instance.new("TextButton")
-    b.Size = UDim2.new(1, -4, 0, 36)   -- sedikit margin biar tidak menempel
+    b.Size = UDim2.new(1, -4, 0, 36)
     b.Name = text
     b.BackgroundColor3 = color or Color3.fromRGB(54,54,62)
     b.Text = text
@@ -331,7 +343,7 @@ end
 
 local function makeSlider(parent, labelText, min, max, default, onChange)
     local holder = Instance.new("Frame")
-    holder.Size = UDim2.new(1, -4, 0, 54)   -- margin
+    holder.Size = UDim2.new(1, -4, 0, 54)
     holder.Name = labelText
     holder.BackgroundTransparency = 1
     holder.Parent = parent
@@ -390,7 +402,6 @@ local function makeSlider(parent, labelText, min, max, default, onChange)
 end
 
 -- =============== 1. MOVEMENT ===============
--- Halaman Movement v1
 local movePage1 = secMove.addPage("v1")
 makeSlider(movePage1, "Walk Speed", 16, 300, state.speed, function(v)
     state.speed = v
@@ -413,9 +424,8 @@ btnInf.MouseButton1Click:Connect(function()
     btnInf.Text = state.infiniteJump and "Infinite Jump: ON 🦘" or "Infinite Jump: OFF"
 end)
 
--- Halaman Movement v2 (contoh tambahan)
 local movePage2 = secMove.addPage("v2")
-makeButton(movePage2, "Fly: COMING SOON", Color3.fromRGB(60,40,40)).AutoButtonColor = false -- placeholder
+makeButton(movePage2, "Fly: COMING SOON", Color3.fromRGB(60,40,40)).AutoButtonColor = false
 
 -- Noclip logic
 RS.Stepped:Connect(function()
@@ -490,7 +500,6 @@ makeSlider(visPage1, "Camera FOV", 50, 120, state.fov, function(v)
     Camera.FieldOfView = v
 end)
 
--- Halaman Visual v2
 local visPage2 = secVis.addPage("v2")
 local btnNV = makeButton(visPage2, "Night Vision: OFF")
 btnNV.MouseButton1Click:Connect(function()
@@ -518,7 +527,6 @@ makeSlider(worldPage1, "Time of Day", 0, 24, math.floor(state.clockTime + 0.5), 
     Lighting.ClockTime = v
 end)
 
--- Halaman World v2
 local worldPage2 = secWorld.addPage("v2")
 local btnReduceLag = makeButton(worldPage2, "Reduce Lag: OFF", Color3.fromRGB(80, 160, 80))
 btnReduceLag.MouseButton1Click:Connect(function()
@@ -557,6 +565,17 @@ btnSit.MouseButton1Click:Connect(function()
     if hum then hum.Sit = not hum.Sit end
 end)
 
--- Halaman Utility v2 (placeholder)
 local utilPage2 = secUtil.addPage("v2")
 makeButton(utilPage2, "More Soon...", Color3.fromRGB(40,40,40)).AutoButtonColor = false
+
+-- ⭐ =============== 5. FARM (COMING SOON) ===============
+local farmPage1 = secFarm.addPage("v1")
+makeButton(farmPage1, "🏠 Auto Farm - Coming Soon", Color3.fromRGB(80, 80, 80)).AutoButtonColor = false
+
+-- ⭐ =============== 6. PLAYER (COMING SOON) ===============
+local playerPage1 = secPlayer.addPage("v1")
+makeButton(playerPage1, "👤 Player Options - Coming Soon", Color3.fromRGB(80, 80, 80)).AutoButtonColor = false
+
+-- ⭐ =============== 7. TEST (COMING SOON) ===============
+local testPage1 = secTest.addPage("v1")
+makeButton(testPage1, "🧪 Test Features - Coming Soon", Color3.fromRGB(80, 80, 80)).AutoButtonColor = false
